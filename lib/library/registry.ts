@@ -13,6 +13,7 @@ import { EXTRA_DEFS } from "./defs-extra"
 import { MARKETING_DEFS } from "./defs-blocks-marketing"
 import { APP_DEFS } from "./defs-blocks-app"
 import { MOBILE_DEFS } from "./defs-mobile"
+import { SYSTEMS_DEFS } from "./defs-systems"
 
 export type ControlType = "select" | "toggle" | "text" | "number" | "icon"
 
@@ -38,7 +39,19 @@ export type Props = Record<string, unknown>
 export type Category = "components" | "blocks"
 
 export const GROUPS: Record<Category, string[]> = {
-  components: ["Buttons", "Forms", "Selection", "Display", "Feedback", "Navigation", "Data", "Media"],
+  components: [
+    "Buttons",
+    "Forms",
+    "Selection",
+    "Display",
+    "Feedback",
+    "Navigation",
+    "Data",
+    "Media",
+    "Systems",
+    "Pipelines",
+    "Infra",
+  ],
   blocks: ["Marketing", "Content", "Commerce", "App", "AI", "Screens"],
 }
 
@@ -65,6 +78,7 @@ const SOURCES: ComponentDef[][] = [
   APP_DEFS,
   TEMPLATE_DEFS,
   MOBILE_DEFS,
+  SYSTEMS_DEFS,
 ]
 
 /** First definition of a `kind` wins, so a duplicate slug can't shadow a core one. */

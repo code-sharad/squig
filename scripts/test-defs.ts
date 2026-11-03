@@ -13,7 +13,7 @@
 // of its options, shows up as a blank or wrong-looking field in the panel.
 // ---------------------------------------------------------------------------
 
-import { ALL_DEFS, type ComponentDef } from "../lib/library/registry.ts"
+import { ALL_DEFS, GROUPS, getDef, type ComponentDef } from "../lib/library/registry.ts"
 import type { Prim } from "../lib/sketch/kit.ts"
 import { resolveIconName } from "../lib/sketch/icons.ts"
 import { check, report } from "./harness.ts"
@@ -244,6 +244,61 @@ for (const def of phones) {
   const texts = def.controls.filter((c) => c.type === "text").map((c) => c.key)
   check(`${def.kind} has words you can change`, texts.length > 0, "no text control")
 }
+
+// -- the systems shelf ------------------------------------------------------
+// The render loop above already checks each box. What it can't infer is that
+// the shelf is a complete, ordered set: twenty-two kinds, each in its one
+// section, with nothing left over and no kind repeating the document's own
+// word for a layer.
+
+const SHELF: [kind: string, group: string][] = [
+  ["server", "Systems"],
+  ["database", "Systems"],
+  ["cache", "Systems"],
+  ["queue", "Systems"],
+  ["topic", "Systems"],
+  ["worker", "Systems"],
+  ["load-balancer", "Systems"],
+  ["gateway", "Systems"],
+  ["cdn", "Systems"],
+  ["object-store", "Systems"],
+  ["client", "Systems"],
+  ["external", "Systems"],
+  ["pipeline", "Pipelines"],
+  ["cron", "Pipelines"],
+  ["stream", "Pipelines"],
+  ["warehouse", "Pipelines"],
+  ["metrics", "Pipelines"],
+  ["pod", "Infra"],
+  ["container", "Infra"],
+  ["machine", "Infra"],
+  ["ingress", "Infra"],
+  ["secret", "Infra"],
+]
+
+for (const [kind, group] of SHELF) {
+  const def = getDef(kind)
+  check(`the systems shelf ships ${kind}`, !!def)
+  check(`${kind} sits under ${group}`, def?.group === group, def?.group)
+}
+
+const shelfGroups = ["Systems", "Pipelines", "Infra"]
+const shelved = ALL_DEFS.filter((d) => d.group !== undefined && shelfGroups.includes(d.group))
+check("the shelf is exactly the kinds it names", shelved.length === SHELF.length, shelved.map((d) => d.kind).join(", "))
+check("the shelf has no strays", shelved.every((d) => SHELF.some(([kind]) => kind === d.kind)))
+check("the shelf lives in the components category", shelved.every((d) => d.category === "components"))
+check("the shelf has no node kind, since node already means a layer", getDef("node") === undefined)
+check("the shelf leaves the dashboard slug to the screen template", getDef("dashboard")?.category === "blocks")
+check("a dashboard box is still found by its word", getDef("metrics")?.keywords?.includes("dashboard") === true)
+check("machine still answers to node", getDef("machine")?.keywords?.includes("node") === true)
+
+const componentGroups = GROUPS.components
+const mediaAt = componentGroups.indexOf("Media")
+check(
+  "the shelf groups follow Media",
+  mediaAt >= 0 && shelfGroups.every((g, i) => componentGroups[mediaAt + 1 + i] === g),
+  componentGroups.join(", ")
+)
 
 // ---------------------------------------------------------------------------
 
