@@ -16,7 +16,7 @@
 // ---------------------------------------------------------------------------
 
 import type { SquigNode, TextNode } from "./types"
-import { normalizeArrowAnchors, normalizeBind, normalizeCrop, normalizeLineStyle } from "./types"
+import { normalizeArrowAnchors, normalizeBind, normalizeCrop, normalizeLabel, normalizeLineStyle } from "./types"
 import { normalizeRotation } from "./canvas/rotation"
 import { normalizeGroupIds } from "./canvas/groups"
 
@@ -146,6 +146,7 @@ export function validNode(v: unknown): SquigNode | null {
       n.elbowAxis = n.elbowAxis === "x" || n.elbowAxis === "y" ? n.elbowAxis : undefined
       n.elbowOffset = validPoint(n.elbowOffset) ? n.elbowOffset : undefined
       n.curveBend = validPoint(n.curveBend) ? n.curveBend : undefined
+      n.label = normalizeLabel(n.label)
       // A free line cannot carry a live relationship in through a file or the
       // clipboard. Keeping both spellings would make the inspector lie.
       if (n.snap === false) {

@@ -17,7 +17,7 @@
 import { componentNode, shapeNode, textNode } from "../lib/doc.ts"
 import { EXPORT_PAD, loadIconsFor, renderSvg } from "../lib/sketch/svg.ts"
 import { bgOf, DEFAULT_LOOK, paletteOf, type Look } from "../lib/theme.ts"
-import type { ImageNode, SquigNode } from "../lib/types.ts"
+import type { ArrowNode, ImageNode, SquigNode } from "../lib/types.ts"
 import { check, report } from "./harness.ts"
 
 // -- fixtures ---------------------------------------------------------------
@@ -88,6 +88,24 @@ const gs = (svg: string) => (svg.match(/<g transform="translate\(/g) ?? []).leng
   check("angle brackets in a label are escaped", svg.includes("&lt;b&gt;bold&lt;/b&gt;"))
   check("…and so is the ampersand", svg.includes("&amp;"))
   check("…leaving no tag behind", !svg.includes("<b>"))
+}
+
+// -- a connector's word sits on its own paper -------------------------------
+
+{
+  const arrow: ArrowNode = { id: "arrow", seed: 16, type: "arrow", head: true, x: 0, y: 0, w: 200, h: 40, points: [[0, 0], [200, 40]], label: "sign in" }
+  const svg = renderSvg([arrow], LOOK)
+  const pad = new RegExp(
+    `<path d="[^"]*" stroke="none" stroke-width="0" fill="${paletteOf(LOOK.theme).paper}"`
+  )
+  check("a labelled connector prints its word", svg.includes(">sign in</text>"))
+  check("…on an opaque paper pad", pad.test(svg))
+  check("…and the pad is behind the word", svg.search(pad) < svg.indexOf(">sign in</text>"))
+}
+
+{
+  const stub: ArrowNode = { id: "stub", seed: 17, type: "arrow", head: true, x: 0, y: 0, w: 30, h: 0, points: [[0, 0], [30, 0]], label: "a word with nowhere to go" }
+  check("a word longer than its stub is not printed", !renderSvg([stub], LOOK).includes("nowhere"))
 }
 
 // -- a pasted picture travels with the file ---------------------------------

@@ -191,7 +191,7 @@ window.squig.zoomToFit()`,
       },
       {
         title: "The complete node vocabulary",
-        text: "component: kind plus props from the catalog. shape: rect or ellipse with fill. text: text and fontSize, with align, verticalAlign, fixedW/fixedH, bold, italic, underline, link and optional box styling. arrow: two points relative to its origin, head, optional bind/anchors and straight/elbow/curved lineStyle. draw: relative freehand points. image: raster data URL, naturalW/naturalH and optional normalized crop. All support geometry, groupIds, flipX/flipY and locked.",
+        text: "component: kind plus props from the catalog. shape: rect or ellipse with fill. text: text and fontSize, with align, verticalAlign, fixedW/fixedH, bold, italic, underline, link and optional box styling. arrow: two points relative to its origin, head, optional bind/anchors, straight/elbow/curved lineStyle and an optional label. draw: relative freehand points. image: raster data URL, naturalW/naturalH and optional normalized crop. All support geometry, groupIds, flipX/flipY and locked.",
       },
       {
         title: "Create and modify",

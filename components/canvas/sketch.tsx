@@ -121,7 +121,7 @@ export const NodeSketch = memo(function NodeSketch({
       case "draw":
         return `d:${node.points.length}:${node.w}:${node.h}:${flip}:${node.points[0]?.join()}:${node.points.at(-1)?.join()}:${pen}`
       case "arrow":
-        return `a:${node.w}:${node.h}:${flip}:${node.head}:${node.points.flat().join()}:${node.anchors?.join() ?? ""}:${node.lineStyle ?? ""}:${node.elbowAxis ?? ""}:${node.elbowOffset?.join() ?? ""}:${node.curveBend?.join() ?? ""}:${pen}`
+        return `a:${node.w}:${node.h}:${flip}:${node.head}:${node.points.flat().join()}:${node.anchors?.join() ?? ""}:${node.lineStyle ?? ""}:${node.elbowAxis ?? ""}:${node.elbowOffset?.join() ?? ""}:${node.curveBend?.join() ?? ""}:${node.label ?? ""}:${pen}`
       case "text":
         // w and align place the anchor, so a resize or a realignment is a
         // different set of marks even when the words haven't changed

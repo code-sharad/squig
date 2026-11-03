@@ -9,7 +9,7 @@
 import { HAND, mirrorPrims, type Prim, type PrimOpts } from "./kit"
 import { textAnchorX, textBaseline, textBoxPadding, textContentWidth, textVerticalOffset } from "./text-layout"
 import { wrapText, type TextMeasurer } from "@/lib/canvas/text-metrics"
-import { localArrowRoute, localRouteEndTangent } from "@/lib/canvas/line-routing"
+import { ARROW_LABEL_SIZE, localArrowLabelBox, localArrowRoute, localRouteEndTangent } from "@/lib/canvas/line-routing"
 import {
   normalizeFill,
   normalizeInk,
@@ -106,6 +106,30 @@ export function basePrims(node: SquigNode, measureText?: TextMeasurer): Prim[] {
           ],
           // a dashed arrowhead reads as a rendering fault, not a style
           o: { ...o, dashed: false },
+        })
+      }
+      const pad = localArrowLabelBox(route, node.label)
+      if (pad) {
+        // paper, not a frame: the line has to be interrupted for the letters to
+        // read, and an outline here would look like a second node on the line
+        out.push({
+          t: "rect",
+          x: pad.x,
+          y: pad.y,
+          w: pad.w,
+          h: pad.h,
+          o: { fill: "solid", fillColor: "paper", strokeWidth: 0 },
+        })
+        out.push({
+          t: "text",
+          x: pad.x + pad.w / 2,
+          y: pad.y + pad.h / 2 + ARROW_LABEL_SIZE * 0.35,
+          text: node.label ?? "",
+          size: ARROW_LABEL_SIZE,
+          align: "center",
+          // a label on an untouched connector sits quieter than the line; one
+          // on a dimmed connector takes the tone the user chose, so it dims too
+          color: node.ink ? normalizeInk(node.ink) : "muted",
         })
       }
       return out
