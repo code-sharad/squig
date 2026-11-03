@@ -162,8 +162,16 @@ function meta(id: string, updatedAt = 20_000, name = "in hand"): FileMeta {
   }
 
   check("an older preference set gets the default big nudge", loadPrefs().bigNudge === 10)
-  savePrefs({ look: DEFAULT_LOOK, contextRow: false, bigNudge: 24, activeId: null })
+  check("a preference set with no appearance reads as system", loadPrefs().appearance === "system")
+  savePrefs({ look: DEFAULT_LOOK, appearance: "dark", contextRow: false, bigNudge: 24, activeId: null })
   check("a custom big nudge survives a preference round trip", loadPrefs().bigNudge === 24)
+  check("the room survives a preference round trip", loadPrefs().appearance === "dark")
+  // a prefs blob written before the room existed, exactly as it would sit on disk
+  store.set(
+    "squig:prefs:v1",
+    JSON.stringify({ look: DEFAULT_LOOK, contextRow: false, bigNudge: 10, activeId: null }),
+  )
+  check("an old prefs blob with no appearance reads as system", loadPrefs().appearance === "system")
   store.clear()
 
   const doc = (updatedAt: number, name = "d"): StoredDoc => ({ id: "d1", name, nodes: {}, order: [], updatedAt })

@@ -146,9 +146,57 @@
   padding: 12px 16px;
   border-radius: var(--radius-chrome-sm);
 }
+/* The light error surface is a pink wash; at night it has to be a dark red one,
+   and its text goes pale so it keeps roughly the contrast it has in the day. */
+.dark .agent-error {
+  color: #ffb4ad;
+  background: #3a1e1e;
+}
 .agent-muted {
   color: #64708c;
   font-size: var(--text-row);
+}
+/* The docs and connect pages keep their blue identity at night rather than
+   borrowing the canvas chrome's warm charcoal: they are the manual, not the
+   tool, and a page that stays white in a dark room is a flash bang. */
+.dark .agent-page {
+  background: #10131c;
+  color: #dbe2f5;
+}
+.dark .agent-nav {
+  background: #151926;
+  border-bottom-color: #262c3d;
+}
+.dark .agent-brand {
+  color: #7f9bff;
+}
+.dark .agent-lead {
+  color: #9aa6c4;
+}
+.dark .agent-button.secondary {
+  background: #1b2030;
+  color: #9db4ff;
+  border-color: #3a4570;
+}
+.dark .agent-page input,
+.dark .agent-page textarea {
+  background: #151926;
+  color: #e6eaf5;
+  border-color: #3a4260;
+}
+.dark .agent-panel {
+  background: #161a26;
+  border-color: #262c3d;
+}
+.dark .agent-code {
+  background: #131824;
+  color: #c3cdea;
+}
+.dark .agent-muted {
+  color: #9aa3ba;
+}
+.dark .agent-list li {
+  border-bottom-color: #262c3d;
 }
 .agent-row {
   display: flex;
@@ -273,6 +321,11 @@
 .agent-connect-panel[data-ending-style] {
   opacity: 0;
   transform: translateY(-4px);
+}
+/* #0002 is enough to lift a white panel off a light page and invisible under a
+   dark one, so the dark room borrows the chrome's deeper popup elevation. */
+.dark .agent-connect-panel {
+  box-shadow: var(--shadow-popup);
 }
 .agent-connect-panel p {
   margin: 8px 0;

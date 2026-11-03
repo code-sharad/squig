@@ -29,6 +29,7 @@ import { drawNodes, loadIconsFor } from "./sketch/svg"
 import { copiedSurface, svgDocument, type ExportDrawing, type ExportSurface } from "./export-image-document"
 import { downloadBlob } from "./file-io"
 import { useSquig } from "./store"
+import { isDark } from "./theme"
 import type { SquigNode } from "./types"
 
 /** retina by default: a wireframe pasted into a doc gets read at 1×, not 2× */
@@ -211,9 +212,12 @@ async function draw(list: SquigNode[]): Promise<ExportDrawing> {
 
   const s = useSquig.getState()
   const font = canvasFontStack()
+  // Saving a picture in a dark room saves the dark picture: the file is what
+  // the person is looking at, not a different drawing in yesterday's room.
+  const night = isDark(s.appearance, s.systemDark)
   // named boundaries travel with the picture: a region's name is part of what
   // the drawing says, so an export that dropped it would be a different drawing
-  const d = drawNodes(list, { theme: s.theme, paper: s.paper, font: s.font, grid: s.grid }, { font, groups: s.groups })
+  const d = drawNodes(list, { theme: s.theme, paper: s.paper, font: s.font, grid: s.grid }, { font, groups: s.groups, night })
   if (!d) throw new Error("nothing to draw")
   return { ...d, css: await fontFaceCss(font) }
 }

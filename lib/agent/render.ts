@@ -23,6 +23,9 @@ export function renderSvg(document: CanvasDocument, variationId?: string) {
   // The marks come from the same builder the editor's export uses, so a PNG an
   // agent looks at and a PNG a person saves are the same picture. The measurer
   // is what makes the line breaks here agree with measure_text.
+  //
+  // This one is always the day palette: the agent's picture is rendered from a
+  // file, and a file has no room to be in the dark in.
   const drawn = drawNodes(nodes, document.look, {
     measureText: textMeasurer(document.look.font),
     pad: PAD,

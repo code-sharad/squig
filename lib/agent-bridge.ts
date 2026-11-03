@@ -36,6 +36,7 @@ import {
 } from "./doc"
 import { resizeSpacedNodes, spaceNodes, tidyNodes, type SpacingOptions, type SpacingAxis } from "./canvas/spacing"
 import { renderSvg } from "./sketch/svg"
+import { isDark } from "./theme"
 import { lookOf, useSquig } from "./store"
 import type { Box, ShapeKind, SquigNode } from "./types"
 
@@ -183,7 +184,11 @@ const api: SquigAgentApi = {
     const d = current()
     const picked = ids ? new Set(ids) : null
     const list = picked ? d.order.filter((id) => picked.has(id)).map((id) => d.nodes[id]) : nodesOf(d)
-    return renderSvg(list, d.look, "paper", undefined, d.groups)
+    // the browser has a room, so this picture inherits it; the companion's PNG
+    // and the CLI do not, which is why they stay in the day palette
+    const room = useSquig.getState()
+    const night = isDark(room.appearance, room.systemDark)
+    return renderSvg(list, d.look, "paper", undefined, { groups: d.groups, night })
   },
 }
 

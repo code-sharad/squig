@@ -278,7 +278,10 @@ async function run(command: string | undefined, args: string[]): Promise<void> {
     case "render": {
       const doc = readDoc(need(args[0], "a document"))
       await loadIconsFor(nodesOf(doc))
-      const svg = renderSvg(nodesOf(doc), doc.look, flag.transparent ? "transparent" : "paper", undefined, doc.groups)
+      // A file rendered from a terminal has no room to be in, so it is always
+      // the day palette. The browser's own export is the one that follows the
+      // person looking at it.
+      const svg = renderSvg(nodesOf(doc), doc.look, flag.transparent ? "transparent" : "paper", undefined, { groups: doc.groups })
       if (!svg) throw new DocError("nothing on the sheet to draw")
       if (!flag.out) {
         process.stdout.write(svg + "\n")

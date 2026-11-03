@@ -259,6 +259,38 @@ export function paletteOf(name: string, night = false): Palette {
 }
 
 // ---------------------------------------------------------------------------
+// The room.
+//
+// Light or dark belongs to the app, not to the drawing: two documents opened
+// side by side share one room, and a drawing opened on somebody else's dark
+// laptop is still the same drawing. So the choice lives in prefs, never in a
+// .squig.json, and the palette it paints is the same palette in its night form.
+// ---------------------------------------------------------------------------
+
+export type Appearance = "light" | "dark" | "system"
+export const DEFAULT_APPEARANCE: Appearance = "system"
+
+/** The preference the two callers and the pre-paint script both listen to. */
+export const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)"
+
+/**
+ * Which room to paint, from the setting and what the system says.
+ *
+ * Pure so the three-way choice can be checked without a browser in the room;
+ * `systemPrefersDark` below is the only part that reaches for one.
+ */
+export function isDark(appearance: Appearance, systemDark: boolean): boolean {
+  return appearance === "dark" || (appearance === "system" && systemDark)
+}
+
+/** What the system says right now: false where there is no window to ask,
+    and false for the partial window a node test stubs. */
+export function systemPrefersDark(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false
+  return window.matchMedia(SYSTEM_DARK_QUERY).matches
+}
+
+// ---------------------------------------------------------------------------
 // The look.
 //
 // Ink, paper, font and grid belong to the drawing, not to the app: a red
@@ -283,11 +315,13 @@ export const DEFAULT_LOOK: Look = {
   grid: true,
 }
 
-/** Write a look onto the document element. `grid` is drawn by the canvas, not
-    by a custom property, so it is the one part this doesn't touch. */
-export function applyLook({ theme, font, paper }: Look) {
+/** Write a look onto the document element, in the room it is in. `grid` is
+    drawn by the canvas, not by a custom property, so it is the one part this
+    doesn't touch. The `dark` class is set here rather than beside it so the
+    canvas and the chrome can never end up in two different rooms. */
+export function applyLook({ theme, font, paper }: Look, dark: boolean) {
   if (typeof document === "undefined") return
-  const p = paletteOf(theme)
+  const p = paletteOf(theme, dark)
   const root = document.documentElement
   root.style.setProperty("--sq-bg", bgOf(p, paper))
   root.style.setProperty("--sq-paper", p.paper)
@@ -299,6 +333,7 @@ export function applyLook({ theme, font, paper }: Look) {
   root.style.setProperty("--sq-grid", gridOf(p, paper))
   root.style.setProperty("--sq-select", p.select)
   root.style.setProperty("--sq-font", FONT_FAMILY[font] ?? FONT_FAMILY.hand)
+  root.classList.toggle("dark", dark)
 }
 
 // -- a look from somewhere else ----------------------------------------------
@@ -316,6 +351,11 @@ function knownFont(f: unknown): FontMode {
 
 function knownPaper(s: unknown): PaperShade {
   return s === "white" || s === "subtle" || s === "shaded" ? s : DEFAULT_PAPER
+}
+
+/** A prefs blob written before the room existed reads as `system`. */
+export function knownAppearance(a: unknown): Appearance {
+  return a === "light" || a === "dark" || a === "system" ? a : DEFAULT_APPEARANCE
 }
 
 /**

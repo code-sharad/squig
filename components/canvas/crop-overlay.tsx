@@ -42,7 +42,7 @@ export function CropStage({ node }: { node: ImageNode }) {
  * past them.
  *
  * It stands in for the selection ring while the mode is on, so it draws the
- * same white dot on the same blue, at the same sizes: this is still "the thing
+ * same paper dot on the same select ring, at the same sizes: this is still "the thing
  * you have hold of", just a different thing. The rest of the picture gets a
  * dashed outline, which is the only honest way to say how much room a drag
  * still has left.
@@ -124,7 +124,7 @@ export function CropOverlay({
                 onPointerDown={(e) => onStartCrop(hd, e)}
               >
                 <div
-                  className="pointer-events-none absolute rounded-[3px] bg-white"
+                  className="pointer-events-none absolute rounded-[3px] bg-[var(--sq-paper)]"
                   style={{
                     left: box.dotLeft,
                     top: box.dotTop,

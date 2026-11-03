@@ -57,7 +57,7 @@ import {
 } from "@phosphor-icons/react"
 import { kbd } from "@/lib/shortcuts"
 import { InkPicker } from "./ink-picker"
-import { bgOf, paletteOf, PAPER_SHADES, type FontMode, type PaperShade } from "@/lib/theme"
+import { bgOf, isDark, paletteOf, PAPER_SHADES, type Appearance, type FontMode, type PaperShade } from "@/lib/theme"
 import { LineStyleSegments } from "./line-style-controls"
 import { MAX_BIG_NUDGE, MIN_BIG_NUDGE } from "@/lib/nudge"
 
@@ -112,6 +112,13 @@ const FONT_OPTIONS: readonly SegmentOption<FontMode>[] = [
   { value: "hand", label: "Hand-drawn", content: <FontSample family="var(--font-sketch)" /> },
   { value: "sans", label: "Sans serif", content: <FontSample family="var(--font-sans)" /> },
   { value: "serif", label: "Serif", content: <FontSample family="var(--font-serif)" /> },
+]
+
+/** One word each, so the three fit the track beside the label. */
+const APPEARANCE_OPTIONS: readonly SegmentOption<Appearance>[] = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
 ]
 
 /** A larger sample makes the three canvas faces easy to tell apart. */
@@ -243,15 +250,18 @@ function PageSettings() {
   const theme = useSquig((s) => s.theme)
   const contextRow = useSquig((s) => s.contextRow)
   const bigNudge = useSquig((s) => s.bigNudge)
+  const appearance = useSquig((s) => s.appearance)
+  const systemDark = useSquig((s) => s.systemDark)
   const nodes = useSquig((s) => s.nodes)
   const order = useSquig((s) => s.order)
   const st = useSquig.getState
 
-  const palette = paletteOf(theme)
+  const palette = paletteOf(theme, isDark(appearance, systemDark))
   const locked = lockedIds(nodes, order)
 
-  /** Built per palette, not once at module load — the samples preview this
-      theme's actual sheet, which is the whole point of showing them. */
+  /** Built per palette and per room, not once at module load: the samples
+      preview this theme's actual sheet, and at night that sheet is the night
+      one. */
   const paperOptions: SegmentOption<PaperShade>[] = PAPER_SHADES.map(({ value, label }) => ({
     value,
     label: `${label} paper`,
@@ -326,6 +336,14 @@ function PageSettings() {
             className="scale-90"
           />
         </Row>
+        <StackRow label="Appearance" help="Light room, dark room, or follow the system.">
+          <Segmented
+            ariaLabel="Appearance"
+            options={APPEARANCE_OPTIONS}
+            shared={{ mixed: false, value: appearance }}
+            onChange={(a) => st().setAppearance(a)}
+          />
+        </StackRow>
       </PanelSection>
     </>
   )
