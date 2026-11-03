@@ -108,7 +108,9 @@ export function boundaryPrims(style: GroupStyle, w: number, h: number): Prim[] {
       w,
       h,
       r: CORNER,
-      o: { stroke: "faint", strokeWidth: HAND.strokeWidth * LIGHT_PEN, dashed: true },
+      // `tone` is the ink; `stroke` would only pick pressure, and a boundary's
+      // whole job is to recede behind the boxes it holds
+      o: { tone: "faint", strokeWidth: HAND.strokeWidth * LIGHT_PEN, dashed: true },
     },
   ]
 

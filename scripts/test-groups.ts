@@ -21,6 +21,7 @@ const held = new Map<string, string>()
 const { useSquig } = await import("../lib/store.ts")
 const { canGroupSelection, groupPickForHit, pruneGroupStyles, selectionForPress, stepIntoGroup } = await import("../lib/canvas/groups.ts")
 const { BOUNDARY_PAD, boundaryList, boundaryPrims, boundarySeed } = await import("../lib/canvas/boundary.ts")
+const { HAND } = await import("../lib/sketch/kit.ts")
 import type { SquigNode } from "../lib/types.ts"
 import { check, report } from "./harness.ts"
 
@@ -300,7 +301,11 @@ const area = (id: string, x: number, y: number, w: number, h: number, groupIds?:
 
 {
   const inside = boundaryPrims({ label: "aws" }, 200, 100)
-  check("a boundary draws a dashed hairline in the faint ink", inside[0].t === "rect" && !!inside[0].o?.dashed && inside[0].o?.stroke === "faint")
+  const line = inside[0]
+  // `stroke` is pen pressure and `tone` is the ink: a boundary asks for the
+  // faint line, not a lighter pen pressing the full ink
+  check("a boundary draws a dashed hairline in the faint ink", line.t === "rect" && !!line.o?.dashed && line.o?.tone === "faint")
+  check("…with the light pen, not the house one", line.t === "rect" && (line.o?.strokeWidth ?? HAND.strokeWidth) < HAND.strokeWidth)
   const name = inside[1]
   check("…and its name inside the box", name.t === "text" && name.text === "aws" && name.color === "muted" && name.x === 14)
   const right = boundaryPrims({ label: "aws", at: "inside-right" }, 200, 100)[1]
