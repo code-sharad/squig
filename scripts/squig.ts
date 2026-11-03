@@ -277,7 +277,7 @@ async function run(command: string | undefined, args: string[]): Promise<void> {
     case "render": {
       const doc = readDoc(need(args[0], "a document"))
       await loadIconsFor(nodesOf(doc))
-      const svg = renderSvg(nodesOf(doc), doc.look, flag.transparent ? "transparent" : "paper")
+      const svg = renderSvg(nodesOf(doc), doc.look, flag.transparent ? "transparent" : "paper", undefined, doc.groups)
       if (!svg) throw new DocError("nothing on the sheet to draw")
       if (!flag.out) {
         process.stdout.write(svg + "\n")

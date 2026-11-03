@@ -2,7 +2,7 @@
 
 import { create } from "zustand"
 import { nanoid } from "nanoid"
-import type { ComponentNode, ImageNode, SquigComment, SquigVariation, SquigNode, TextAlign, TextNode, TextVerticalAlign, Tool, Viewport, ShapeKind } from "./types"
+import type { ComponentNode, GroupStyles, ImageNode, SquigComment, SquigVariation, SquigNode, TextAlign, TextNode, TextVerticalAlign, Tool, Viewport, ShapeKind } from "./types"
 import { screenToWorld, unionBox } from "./types"
 import { componentNode, DocError, parseDoc, sanitizeDoc, serializeDoc } from "./doc"
 import { remapBinds, settleBinds } from "./canvas/arrow-binding"
@@ -96,6 +96,8 @@ interface SquigState {
   /** which file in the drawer this canvas is — every doc has one */
   docId: string
   fileName: string
+  /** names on groups: a record only exists once a group is named */
+  groups: GroupStyles
   variations: SquigVariation[]
   comments: SquigComment[]
   /** the drawer, newest first; kept in state so menus re-render as it changes */
@@ -783,6 +785,7 @@ function watchWindow(get: () => SquigState) {
 export const useSquig = create<SquigState>((set, get) => ({
   docId: nanoid(8),
   fileName: "untitled scribbles",
+  groups: {},
   variations: [],
   comments: [],
   files: [],

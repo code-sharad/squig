@@ -329,6 +329,62 @@ const button = (id: string, x = 0, y = 0) => componentNode("button", { id, seed:
   check("nothing at all is nothing to group", groupNodes(doc, []) === null)
 }
 
+// -- named groups -----------------------------------------------------------
+
+{
+  const base = addNodes(emptyDoc("regions", LOOK), [button("b", 0, 0), button("c", 200, 0)])
+  const g = groupNodes(base, ["b", "c"], "region")!
+  const named: SquigDocument = { ...g.doc, groups: { region: { label: "  aws\n us-east-1  ", at: "edge-center" } } }
+  const written = JSON.parse(serializeDoc(named)) as Record<string, unknown>
+  check("a name is written to the file", JSON.stringify(written.groups) === JSON.stringify({ region: { label: "aws us-east-1", at: "edge-center" } }))
+
+  const back = parseDoc(serializeDoc(named))
+  check(
+    "…and survives the round trip",
+    JSON.stringify(back?.groups) === JSON.stringify({ region: { label: "aws us-east-1", at: "edge-center" } })
+  )
+
+  const unknownAt = parseDoc(JSON.stringify({ ...named, groups: { region: { label: "band", at: "on-left" } } }))
+  check(
+    "an unknown placement is dropped, not guessed at",
+    unknownAt?.groups?.region?.label === "band" && unknownAt?.groups?.region?.at === undefined
+  )
+
+  const wordless = parseDoc(JSON.stringify({ ...named, groups: { region: { label: 40 } } }))
+  check("a wordless record is not a name", wordless?.groups === undefined)
+
+  const blank = parseDoc(JSON.stringify({ ...named, groups: { region: { label: "   " } } }))
+  check("an empty label drops the record", blank?.groups === undefined)
+
+  // JSON.parse, because an object literal would set the prototype instead of
+  // spelling a key, which is exactly the shape a hostile file arrives in
+  const poisoned = parseDoc(JSON.stringify({
+    ...named,
+    groups: JSON.parse('{"__proto__":{"label":"poison"},"region":{"label":"band"}}'),
+  }))
+  check(
+    "a record that would reach the prototype is ignored",
+    !Object.hasOwn(poisoned?.groups ?? {}, "__proto__") && Object.getPrototypeOf(poisoned?.groups) === Object.prototype
+  )
+
+  const long = parseDoc(JSON.stringify({ ...named, groups: { region: { label: "x".repeat(200) } } }))
+  check("a name past the cap is cut to it", long?.groups?.region.label.length === 80)
+
+  const stale = parseDoc(JSON.stringify({ ...named, groups: { gone: { label: "ghost" } } }))
+  check("a name whose group has no members is dropped on load", stale?.groups === undefined)
+
+  const unnamed: SquigDocument = { ...g.doc }
+  check("a document with no names writes no groups field", !("groups" in (JSON.parse(serializeDoc(unnamed)) as object)))
+  check("…and reads back without one", !("groups" in (parseDoc(serializeDoc(unnamed)) as object)))
+
+  const tornDown = removeNodes(named, ["c"])
+  check("losing the group prunes the name", tornDown.groups === undefined)
+  check("…and the file it writes carries no record", !("groups" in (JSON.parse(serializeDoc(tornDown)) as object)))
+
+  const dissolved = updateNode(named, "b", { groupIds: undefined })
+  check("…as does dissolving the group with an update", dissolved.groups === undefined)
+}
+
 // -- z-order ----------------------------------------------------------------
 
 {

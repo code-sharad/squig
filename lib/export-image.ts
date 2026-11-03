@@ -211,7 +211,9 @@ async function draw(list: SquigNode[]): Promise<ExportDrawing> {
 
   const s = useSquig.getState()
   const font = canvasFontStack()
-  const d = drawNodes(list, { theme: s.theme, paper: s.paper, font: s.font, grid: s.grid }, { font })
+  // named boundaries travel with the picture: a region's name is part of what
+  // the drawing says, so an export that dropped it would be a different drawing
+  const d = drawNodes(list, { theme: s.theme, paper: s.paper, font: s.font, grid: s.grid }, { font, groups: s.groups })
   if (!d) throw new Error("nothing to draw")
   return { ...d, css: await fontFaceCss(font) }
 }

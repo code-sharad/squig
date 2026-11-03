@@ -64,6 +64,7 @@ import { copyAsPngWithNotice } from "@/lib/export-image"
 import { clampGestureZoom, zoomFloor, MAX_ZOOM, MIN_ZOOM } from "@/lib/canvas/navigate"
 import { inViewBox, visibleBox } from "@/lib/canvas/cull"
 import { groupPickForHit, pickGroups, selectionForPress, stepIntoGroup, type GroupPick } from "@/lib/canvas/groups"
+import { boundaryList, boundaryPrims } from "@/lib/canvas/boundary"
 import { SpacingOverlay } from "./spacing-overlay"
 import { ContextRow } from "./context-row"
 import { CropOverlay, CropStage } from "./crop-overlay"
@@ -361,6 +362,7 @@ export function Canvas() {
   const nodes = useSquig((s) => s.nodes)
   const order = useSquig((s) => s.order)
   const selection = useSquig((s) => s.selection)
+  const groups = useSquig((s) => s.groups)
   const viewport = useSquig((s) => s.viewport)
   const tool = useSquig((s) => s.tool)
   const grid = useSquig((s) => s.grid)
@@ -2484,6 +2486,20 @@ export function Canvas() {
    * allowed to affect.
    */
   const view = useMemo(() => visibleBox(v, stage.w, stage.h), [v, stage.w, stage.h])
+  /**
+   * The named regions, in the order they print: outermost first, so a zone
+   * reads as holding a service rather than the other way round. They are few
+   * and cheap, so they are not culled; and they are marks, not targets, so a
+   * click still lands on a member and selects the group the way it always did.
+   */
+  const boundaryMarks = useMemo(
+    () =>
+      boundaryList(
+        order.map((id) => nodes[id]).filter(Boolean),
+        groups
+      ).map((boundary) => ({ boundary, prims: boundaryPrims(boundary.style, boundary.w, boundary.h) })),
+    [nodes, order, groups]
+  )
 
   // a soft hover keeps the default cursor: a click there selects, but a drag
   // marquees, and a move cursor would promise a drag this press won't do
@@ -2555,6 +2571,11 @@ export function Canvas() {
         {/* past the gesture floor the pen would print thinner than a pixel and
             the whole board would fade out — see the rule in app/globals.css */}
         <g data-squig-far={v.zoom < MIN_ZOOM ? "" : undefined} transform={`translate(${v.x} ${v.y}) scale(${v.zoom})`}>
+          {boundaryMarks.map(({ boundary, prims }) => (
+            <g key={boundary.groupId} transform={`translate(${boundary.x} ${boundary.y})`}>
+              <SketchPrims prims={prims} seed={boundary.seed} />
+            </g>
+          ))}
           {order.map((id) => {
             const n = nodes[id]
             if (!n || id === cropNode?.id) return null

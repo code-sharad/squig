@@ -299,6 +299,29 @@ check(
   ).document.nodes.b.groupIds === undefined,
 )
 
+// -- an agent edit does not erase a boundary name ---------------------------
+
+const groupId = grouped.nodes.a.groupIds?.[0] ?? ""
+const named: CanvasDocument = { ...grouped, groups: { [groupId]: { label: "aws us-east-1", at: "edge-center" } } }
+check(
+  "an agent node update leaves boundary names untouched",
+  same(
+    applyOperations(named, operation.array().parse([{ op: "update", patches: [{ id: "a", patch: { x: 12 } }] }])).document.groups,
+    named.groups,
+  ),
+)
+check(
+  "…and a name goes when its group's last member does",
+  applyOperations(named, operation.array().parse([{ op: "delete", ids: ["a", "b"] }])).document.groups === undefined,
+)
+check(
+  "a whole-document replacement can carry a name",
+  same(
+    validateDocument({ ...grouped, groups: { [groupId]: { label: "region" } } }).groups,
+    { [groupId]: { label: "region" } },
+  ),
+)
+
 // -- arranging --------------------------------------------------------------
 
 const arranged = applyOperations(

@@ -19,7 +19,8 @@ const held = new Map<string, string>()
 }
 
 const { useSquig } = await import("../lib/store.ts")
-const { canGroupSelection, groupPickForHit, selectionForPress, stepIntoGroup } = await import("../lib/canvas/groups.ts")
+const { canGroupSelection, groupPickForHit, pruneGroupStyles, selectionForPress, stepIntoGroup } = await import("../lib/canvas/groups.ts")
+const { BOUNDARY_PAD, boundaryList, boundaryPrims, boundarySeed } = await import("../lib/canvas/boundary.ts")
 import type { SquigNode } from "../lib/types.ts"
 import { check, report } from "./harness.ts"
 
@@ -200,6 +201,76 @@ for (const [label, duplicate] of [
   s().redo()
   check("redo restores the copied leaves", copies.every((id) => !!s().nodes[id]))
   check("redo restores the copied group as active", !!copiedGroup && s().selectionGroupId === copiedGroup && copiedGroup !== g)
+}
+
+// -- a boundary is a group with a name --------------------------------------
+
+/** a plain rectangle, so the geometry in these cases is the box it says */
+const area = (id: string, x: number, y: number, w: number, h: number, groupIds?: string[]): SquigNode => ({
+  id,
+  seed: 1,
+  type: "shape",
+  shape: "rect",
+  fill: "none",
+  x,
+  y,
+  w,
+  h,
+  ...(groupIds ? { groupIds } : {}),
+})
+
+{
+  const nodes = [area("a", 10, 20, 100, 50, ["region"]), area("b", 200, 0, 40, 30, ["region"]), area("c", 500, 500, 10, 10)]
+  const [boundary] = boundaryList(nodes, { region: { label: "aws" } })
+  check("a named group becomes one boundary", boundaryList(nodes, { region: { label: "aws" } }).length === 1)
+  check("the box is the members' union plus the padding", boundary.x === 10 - BOUNDARY_PAD && boundary.y === 0 - BOUNDARY_PAD)
+  check("…and reaches the far corner too", boundary.x + boundary.w === 240 + BOUNDARY_PAD && boundary.y + boundary.h === 70 + BOUNDARY_PAD)
+  check("a member outside the group doesn't stretch it", boundary.w === 240 - 10 + BOUNDARY_PAD * 2)
+  check("an unnamed group draws nothing", boundaryList(nodes, undefined).length === 0)
+  check("no record, no boundary", boundaryList(nodes, { other: { label: "x" } }).length === 0)
+}
+
+{
+  // outer wraps the zone, the zone wraps the service: depth decides the order,
+  // because an outer boundary printed after its inner one would cover it
+  const nodes = [
+    area("a", 0, 0, 10, 10, ["outer", "inner"]),
+    area("b", 40, 0, 10, 10, ["outer", "inner"]),
+    area("c", 100, 0, 10, 10, ["outer"]),
+  ]
+  const list = boundaryList(nodes, { inner: { label: "zone" }, outer: { label: "region" } })
+  check("nested groups print outermost first", list.map((b) => b.groupId).join() === "outer,inner")
+  check("…and the outer one holds every member at any depth", list[0].x === -BOUNDARY_PAD && list[0].x + list[0].w === 110 + BOUNDARY_PAD)
+  check("…while the inner one holds only its own", list[1].x === -BOUNDARY_PAD && list[1].x + list[1].w === 50 + BOUNDARY_PAD)
+  check("depth comes from the path, not from the order asked about", list[0].depth === 0 && list[1].depth === 1)
+}
+
+{
+  const nodes = [area("a", 0, 0, 10, 10, ["region"]), area("b", 40, 0, 10, 10, ["region"])]
+  const named = Object.fromEntries(nodes.map((n) => [n.id, n]))
+  check("a record whose group has no members draws nothing", boundaryList(nodes, { region: { label: "x" }, gone: { label: "ghost" } }).every((b) => b.groupId === "region"))
+  check("…and is pruned from the document", JSON.stringify(pruneGroupStyles({ region: { label: "x" }, gone: { label: "ghost" } }, named)) === JSON.stringify({ region: { label: "x" } }))
+  check("no names, nothing to prune", pruneGroupStyles(undefined, {}) === undefined)
+  check("pruning the last name leaves no empty record", pruneGroupStyles({ gone: { label: "x" } }, {}) === undefined)
+}
+
+{
+  // the wobble has to survive a re-render, or the dashes crawl on every frame
+  check("the seed is a fold of the id, not a roll", boundarySeed("Wq3dRt") === boundarySeed("Wq3dRt"))
+  check("…and two groups get two seeds", boundarySeed("Wq3dRt") !== boundarySeed("Kd8mPs"))
+  check("…both inside the range a document seed lives in", [boundarySeed("Wq3dRt"), boundarySeed("Kd8mPs")].every((seed) => seed > 0 && seed < 2 ** 31))
+}
+
+{
+  const inside = boundaryPrims({ label: "aws" }, 200, 100)
+  check("a boundary draws a dashed hairline in the faint ink", inside[0].t === "rect" && !!inside[0].o?.dashed && inside[0].o?.stroke === "faint")
+  const name = inside[1]
+  check("…and its name inside the box", name.t === "text" && name.text === "aws" && name.color === "muted" && name.x === 14)
+  const right = boundaryPrims({ label: "aws", at: "inside-right" }, 200, 100)[1]
+  check("inside-right anchors to the right edge", right.t === "text" && right.align === "right" && right.x === 200 - 14)
+  const edge = boundaryPrims({ label: "aws", at: "edge-center" }, 200, 100)
+  check("an edge name brings the shared paper pad", edge.length === 3 && edge[1].t === "rect" && edge[1].o?.fill === "solid" && edge[1].o?.fillColor === "paper")
+  check("…centred on the top edge", edge[1].t === "rect" && edge[1].y < 0 && edge[1].y + edge[1].h > 0)
 }
 
 // ---------------------------------------------------------------------------

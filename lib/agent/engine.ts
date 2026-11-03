@@ -11,7 +11,7 @@ import {
   textNode,
   vouchNode,
 } from "@/lib/doc"
-import { pruneDegenerateGroups } from "@/lib/canvas/groups"
+import { pruneDegenerateGroups, pruneGroupStyles } from "@/lib/canvas/groups"
 import { normalizeRotation } from "@/lib/canvas/rotation"
 import { alignNodes, distributeNodes } from "@/lib/canvas/arrange"
 import type { TextMeasurer } from "@/lib/canvas/text-metrics"
@@ -114,11 +114,15 @@ export function validateDocument(doc: CanvasDocument, maxBytes = 4_000_000): Can
   }
   if (Buffer.byteLength(JSON.stringify(doc)) > maxBytes)
     throw new AgentError(413, maxBytes === 4_000_000 ? "Document exceeds 4 MB" : `Document exceeds ${Math.round(maxBytes / (1024 * 1024))} MiB`)
+  // the batch's invariants, kept once at the end rather than after every
+  // step: a group of one dissolves, an arrow follows its boxes or lets go
+  const settled = settleBinds(pruneDegenerateGroups(nodes))
   return {
     ...doc,
-    // the batch's invariants, kept once at the end rather than after every
-    // step: a group of one dissolves, an arrow follows its boxes or lets go
-    nodes: settleBinds(pruneDegenerateGroups(nodes)),
+    // a name outlives its group only by a bug: the batch that deleted the last
+    // member must take the boundary with it, or the file keeps a ghost record
+    nodes: settled,
+    groups: pruneGroupStyles(doc.groups, settled),
     variations: doc.variations.filter((v) =>
       v.nodeIds.every((id) => Object.hasOwn(nodes, id)),
     ),

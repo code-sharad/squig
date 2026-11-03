@@ -18,6 +18,7 @@ import type {
   Box,
   ComponentNode,
   FillTone,
+  GroupStyles,
   InkTone,
   LineStyle,
   ShapeKind,
@@ -30,11 +31,12 @@ import type {
   TextAlign,
   TextNode,
 } from "./types"
-import { normalizeFill } from "./types"
+import { normalizeFill, normalizeGroupStyle } from "./types"
 import { validNode } from "./clipboard-payload"
 import { bindPair, settleBinds } from "./canvas/arrow-binding"
+import { boundaryList } from "./canvas/boundary"
 import { nodeVisualBounds } from "./canvas/line-routing"
-import { planGroupPaths, pruneDegenerateGroups } from "./canvas/groups"
+import { planGroupPaths, pruneDegenerateGroups, pruneGroupStyles } from "./canvas/groups"
 import { fitTextBox } from "./canvas/text-reflow"
 import type { TextMeasurer } from "./canvas/text-metrics"
 import { ALL_DEFS, getDef, matches, type Category, type ComponentDef, type ControlDef, type Props } from "./library/registry"
@@ -117,11 +119,11 @@ export function sanitizeDoc(nodes: unknown, order: unknown): { nodes: Record<str
 
 /** Agent feedback travels with a drawing even when the editor has no panel for
  * it. Validate the portable fields without pulling Node's agent engine into UI. */
-export function documentMetadata(value: { variations?: unknown; comments?: unknown }): Pick<SquigDoc, "variations" | "comments"> {
+export function documentMetadata(value: { variations?: unknown; comments?: unknown; groups?: unknown }): Pick<SquigDoc, "variations" | "comments" | "groups"> {
   const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value)
   const id = (value: unknown): value is string => typeof value === "string" && ID_PATTERN.test(value) && !RESERVED_IDS.has(value)
   const text = (value: unknown, max: number): value is string => typeof value === "string" && value.length <= max
-  const metadata: Pick<SquigDoc, "variations" | "comments"> = {}
+  const metadata: Pick<SquigDoc, "variations" | "comments" | "groups"> = {}
   if (Array.isArray(value.variations)) metadata.variations = value.variations.slice(0, 1000).filter((item): item is SquigVariation =>
     record(item) && id(item.id) && text(item.title, 120) && text(item.description, 4000) &&
     Array.isArray(item.nodeIds) && item.nodeIds.length <= 5000 && item.nodeIds.every(id),
@@ -134,7 +136,25 @@ export function documentMetadata(value: { variations?: unknown; comments?: unkno
     id: item.id, text: item.text, author: item.author, resolved: item.resolved, createdAt: item.createdAt,
     ...(item.nodeId ? { nodeId: item.nodeId } : {}), ...(item.variationId ? { variationId: item.variationId } : {}),
   }))
+  const groups = groupStyles(value.groups)
+  if (groups) metadata.groups = groups
   return metadata
+}
+
+/**
+ * Every named boundary a file carries, with each name as the format can hold
+ * it. A record whose name is gone is not a record at all, so it drops here; so
+ * does one filed under a key ordinary objects already answer to.
+ */
+function groupStyles(value: unknown): GroupStyles | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const styles: GroupStyles = {}
+  for (const [groupId, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (RESERVED_IDS.has(groupId)) continue
+    const style = normalizeGroupStyle(raw)
+    if (style) styles[groupId] = style
+  }
+  return Object.keys(styles).length ? styles : undefined
 }
 
 /**
@@ -162,18 +182,24 @@ export function parseDoc(
   if (!d.nodes || typeof d.nodes !== "object" || !Array.isArray(d.order)) return null
   const clean = sanitizeDoc(d.nodes, d.order)
   if (Object.keys(d.nodes as object).length && !clean.order.length) return null
+  const { groups: named, ...metadata } = documentMetadata(d)
+  const groups = pruneGroupStyles(named, clean.nodes)
   return {
     fileName: typeof d.fileName === "string" && d.fileName ? d.fileName : fallbackName,
     look: knownLook(d.look, fallbackLook),
     nodes: clean.nodes,
     order: clean.order,
-    ...documentMetadata(d),
+    ...metadata,
+    ...(groups ? { groups } : {}),
   }
 }
 
 export function serializeDoc(doc: SquigDocument): string {
   const { fileName, look, nodes, order, variations, comments } = doc
-  return JSON.stringify({ app: "squig", version: DOC_VERSION, fileName, look, nodes, order, variations, comments }, null, 2)
+  // written the way the format can hold it, and only for groups that still
+  // have members: a hand-built document gets the same gate a file does
+  const groups = pruneGroupStyles(groupStyles(doc.groups), nodes)
+  return JSON.stringify({ app: "squig", version: DOC_VERSION, fileName, look, nodes, order, variations, comments, ...(groups ? { groups } : {}) }, null, 2)
 }
 
 /** The nodes in draw order, which is the only order anything should read them in. */
@@ -181,10 +207,11 @@ export function nodesOf(doc: SquigDoc): SquigNode[] {
   return doc.order.map((id) => doc.nodes[id]).filter(Boolean)
 }
 
-/** The world box the drawing covers — bent connectors included — or null when it's blank. */
+/** The world box the drawing covers, bent connectors and named boundaries included, or null when it's blank. */
 export function docBounds(doc: SquigDoc): Box | null {
+  const nodes = nodesOf(doc)
   let box: Box | null = null
-  for (const n of nodesOf(doc)) {
+  for (const n of nodes) {
     const b = nodeVisualBounds(n)
     box = box
       ? {
@@ -194,6 +221,18 @@ export function docBounds(doc: SquigDoc): Box | null {
           maxY: Math.max(box.maxY, b.y + b.h),
         }
       : { minX: b.x, minY: b.y, maxX: b.x + b.w, maxY: b.y + b.h }
+  }
+  // a boundary is drawn outside its members, so the drawing is wider than the
+  // nodes: an export cropped to the nodes would cut the dashed line off
+  for (const boundary of boundaryList(nodes, doc.groups)) {
+    box = box
+      ? {
+          minX: Math.min(box.minX, boundary.x),
+          minY: Math.min(box.minY, boundary.y),
+          maxX: Math.max(box.maxX, boundary.x + boundary.w),
+          maxY: Math.max(box.maxY, boundary.y + boundary.h),
+        }
+      : { minX: boundary.x, minY: boundary.y, maxX: boundary.x + boundary.w, maxY: boundary.y + boundary.h }
   }
   return box
 }
@@ -474,7 +513,8 @@ export function addNodes(doc: SquigDocument, nodes: readonly SquigNode[]): Squig
     map[n.id] = n
     order.push(n.id)
   }
-  return { ...doc, nodes: settleBinds(pruneDegenerateGroups(map)), order }
+  const settled = settleBinds(pruneDegenerateGroups(map))
+  return { ...doc, nodes: settled, groups: pruneGroupStyles(doc.groups, settled), order }
 }
 
 /** The keys whose change means a text layer's box has to be measured again. */
@@ -533,7 +573,8 @@ export function updateNode(
   const node = doc.nodes[id]
   if (!node) throw new DocError(`no node called "${id}"`)
   const next = patchNode(node, patch, measureText)
-  return { ...doc, nodes: settleBinds(pruneDegenerateGroups({ ...doc.nodes, [id]: next })) }
+  const nodes = settleBinds(pruneDegenerateGroups({ ...doc.nodes, [id]: next }))
+  return { ...doc, nodes, groups: pruneGroupStyles(doc.groups, nodes) }
 }
 
 /** Take nodes off the sheet. An arrow aimed at one lets go and stays where it was drawn. */
@@ -541,9 +582,11 @@ export function removeNodes(doc: SquigDocument, ids: readonly string[]): SquigDo
   const gone = new Set(ids)
   const map = { ...doc.nodes }
   for (const id of gone) delete map[id]
+  const nodes = settleBinds(pruneDegenerateGroups(map))
   return {
     ...doc,
-    nodes: settleBinds(pruneDegenerateGroups(map)),
+    nodes,
+    groups: pruneGroupStyles(doc.groups, nodes),
     order: doc.order.filter((id) => !gone.has(id)),
   }
 }
@@ -560,7 +603,9 @@ export function groupNodes(
   groupId: string = newId()
 ): { doc: SquigDocument; groupId: string } | null {
   const stamped = stampGroup(doc, ids, groupId)
-  return stamped && { doc: { ...stamped, nodes: pruneDegenerateGroups(stamped.nodes) }, groupId }
+  if (!stamped) return null
+  const nodes = pruneDegenerateGroups(stamped.nodes)
+  return { doc: { ...stamped, nodes, groups: pruneGroupStyles(stamped.groups, nodes) }, groupId }
 }
 
 /**

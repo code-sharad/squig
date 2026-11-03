@@ -29,6 +29,7 @@ When the two disagree, the code is right.
 | `look` | how the whole sheet prints. Every field falls back if it is missing or no longer known. |
 | `nodes` | every layer, keyed by id. The key is the name the rest of the file uses. |
 | `order` | z-order, bottom to top. |
+| `groups` | optional names for groups, keyed by the same group id `groupIds` carries. A named group draws a boundary; an unnamed one draws nothing. |
 | `variations` | optional named compositions with member node IDs. |
 | `comments` | optional structured feedback, preserved by browser import/export and local tools. |
 
@@ -63,6 +64,45 @@ The companion's revision token and history are not required document fields.
 Local history lives in a sibling `.squig.json.history` directory, capped at
 50 snapshots and 16 MiB per file. Copy the document to transfer its current
 canvas, variations and comments; copy retained history separately if needed.
+
+## Named groups
+
+A group is membership, and a name is all this adds. There is still no group
+node: the members carry the group id in `groupIds`, and `groups` gives that id
+words.
+
+```json
+{
+  "groups": {
+    "Wq3dRt": { "label": "aws us-east-1", "at": "inside-left" },
+    "Kd8mPs": { "label": "checkout" }
+  }
+}
+```
+
+| field | what it is |
+|---|---|
+| `label` | the name printed on the boundary. One line, at most 80 characters; whitespace is collapsed. |
+| `at` | where the name sits: `inside-left` (absent), `inside-center`, `inside-right`, `edge-left`, `edge-center`, `edge-right`. |
+
+The `inside-*` placements print inside the top of the box. The `edge-*` ones
+sit on the top edge, on a paper pad that interrupts the dashed line. An
+`inside-left` is written by leaving `at` out, the same way every other default
+in this format is spelled, and an `at` nobody recognises is dropped rather
+than guessed at.
+
+Two rules keep the record honest.
+
+- **The box is never stored.** A boundary is the union of its members' visible
+  bounds plus 24 units of padding, worked out when it is drawn. Moving a member
+  moves the boundary; a resolved connector's bulge counts as part of it.
+  Members are every node carrying the group id at any depth, so an outer
+  boundary wraps the groups inside it.
+- **A record lives exactly as long as its group.** Neither the label nor the
+  group earns its keep on its own. Deleting the last member of a named group
+  deletes the name, and a record left behind by a file that was edited by hand
+  is dropped on load. A group with no record is an ordinary invisible group,
+  which is what grouping for tidy selection has always been.
 
 ## Every node
 
