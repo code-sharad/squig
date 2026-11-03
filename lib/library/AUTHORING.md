@@ -130,7 +130,8 @@ Existing defs you can compose with, and their prop keys:
 ## Panel groups
 
 `category: "components"` → group one of:
-`Buttons`, `Forms`, `Selection`, `Display`, `Feedback`, `Navigation`, `Data`, `Media`
+`Buttons`, `Forms`, `Selection`, `Display`, `Feedback`, `Navigation`, `Data`, `Media`,
+`Systems`, `Pipelines`, `Infra`
 
 `category: "blocks"` → group one of:
 `Marketing`, `Content`, `Commerce`, `App`, `AI`, `Screens`
