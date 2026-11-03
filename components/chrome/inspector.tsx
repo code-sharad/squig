@@ -842,7 +842,8 @@ function BoundarySection() {
           onValueChange={(value) => save(style?.label ?? "", value as BoundaryLabelAt)}
         >
           <SelectTrigger size="sm" aria-label="Boundary label placement" className="h-ctl w-full">
-            <SelectValue />
+            {/* the stored value is an id, so the trigger has to say the words */}
+            <SelectValue>{BOUNDARY_AT_OPTIONS.find((option) => option.value === at)?.label}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {BOUNDARY_AT_OPTIONS.map((option) => (
