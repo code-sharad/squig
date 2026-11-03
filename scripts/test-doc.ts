@@ -39,6 +39,7 @@ import {
   type SquigDocument,
 } from "../lib/doc.ts"
 import type { ArrowNode, ComponentNode, ShapeNode, SquigNode, TextNode } from "../lib/types.ts"
+import { BLUEPRINTS, findBlueprint, placeBlueprint } from "../lib/library/system-templates.ts"
 import type { TextMeasurer } from "../lib/canvas/text-metrics.ts"
 import type { Look } from "../lib/theme.ts"
 import { check, report } from "./harness.ts"
@@ -244,6 +245,25 @@ const button = (id: string, x = 0, y = 0) => componentNode("button", { id, seed:
   )
 }
 
+// -- a word on a connector, and the sides it leaves by ----------------------
+
+{
+  const doc = addNodes(emptyDoc("a", LOOK), [button("from", 0, 0), button("to", 300, 0)])
+
+  const labelled = arrowNode({ from: "from", to: "to", label: " HTTPS\nonly " }, doc.nodes)
+  check("an arrow can say its word from the moment it's built", labelled.label === "HTTPS only")
+  check("a blank word is no word", !arrowNode({ from: "from", to: "to", label: "   " }, doc.nodes).label)
+  const long = arrowNode({ from: "from", to: "to", label: "y".repeat(200) }, doc.nodes).label ?? ""
+  check("…and a word past the cap is clipped, not refused", long.length === 120)
+
+  const sided = arrowNode({ from: "from", to: "to", anchors: ["bottom", "right"] }, doc.nodes)
+  check("an arrow can name the sides it leaves by", JSON.stringify(sided.anchors) === JSON.stringify(["bottom", "right"]))
+  const half = arrowNode({ from: "from", to: [900, 900], anchors: ["bottom", "right"] }, doc.nodes)
+  check("a free end has no side, so its anchor goes", JSON.stringify(half.anchors) === JSON.stringify(["bottom", null]))
+  const loose = arrowNode({ from: [0, 0], to: [10, 10], anchors: ["top", "bottom"] }, {})
+  check("an arrow bound to nothing has no anchors at all", loose.anchors === undefined)
+}
+
 // -- adding to a document ---------------------------------------------------
 
 {
@@ -327,6 +347,62 @@ const button = (id: string, x = 0, y = 0) => componentNode("button", { id, seed:
   // one node is not a group; neither is a group that is already whole
   check("one node is nothing to group", groupNodes(doc, ["b"]) === null)
   check("nothing at all is nothing to group", groupNodes(doc, []) === null)
+}
+
+// -- named groups -----------------------------------------------------------
+
+{
+  const base = addNodes(emptyDoc("regions", LOOK), [button("b", 0, 0), button("c", 200, 0)])
+  const g = groupNodes(base, ["b", "c"], "region")!
+  const named: SquigDocument = { ...g.doc, groups: { region: { label: "  aws\n us-east-1  ", at: "edge-center" } } }
+  const written = JSON.parse(serializeDoc(named)) as Record<string, unknown>
+  check("a name is written to the file", JSON.stringify(written.groups) === JSON.stringify({ region: { label: "aws us-east-1", at: "edge-center" } }))
+
+  const back = parseDoc(serializeDoc(named))
+  check(
+    "…and survives the round trip",
+    JSON.stringify(back?.groups) === JSON.stringify({ region: { label: "aws us-east-1", at: "edge-center" } })
+  )
+
+  const unknownAt = parseDoc(JSON.stringify({ ...named, groups: { region: { label: "band", at: "on-left" } } }))
+  check(
+    "an unknown placement is dropped, not guessed at",
+    unknownAt?.groups?.region?.label === "band" && unknownAt?.groups?.region?.at === undefined
+  )
+
+  const wordless = parseDoc(JSON.stringify({ ...named, groups: { region: { label: 40 } } }))
+  check("a wordless record is not a name", wordless?.groups === undefined)
+
+  const blank = parseDoc(JSON.stringify({ ...named, groups: { region: { label: "   " } } }))
+  check("an empty label drops the record", blank?.groups === undefined)
+
+  // JSON.parse, because an object literal would set the prototype instead of
+  // spelling a key, which is exactly the shape a hostile file arrives in
+  const poisoned = parseDoc(JSON.stringify({
+    ...named,
+    groups: JSON.parse('{"__proto__":{"label":"poison"},"region":{"label":"band"}}'),
+  }))
+  check(
+    "a record that would reach the prototype is ignored",
+    !Object.hasOwn(poisoned?.groups ?? {}, "__proto__") && Object.getPrototypeOf(poisoned?.groups) === Object.prototype
+  )
+
+  const long = parseDoc(JSON.stringify({ ...named, groups: { region: { label: "x".repeat(200) } } }))
+  check("a name past the cap is cut to it", long?.groups?.region.label.length === 80)
+
+  const stale = parseDoc(JSON.stringify({ ...named, groups: { gone: { label: "ghost" } } }))
+  check("a name whose group has no members is dropped on load", stale?.groups === undefined)
+
+  const unnamed: SquigDocument = { ...g.doc }
+  check("a document with no names writes no groups field", !("groups" in (JSON.parse(serializeDoc(unnamed)) as object)))
+  check("…and reads back without one", !("groups" in (parseDoc(serializeDoc(unnamed)) as object)))
+
+  const tornDown = removeNodes(named, ["c"])
+  check("losing the group prunes the name", tornDown.groups === undefined)
+  check("…and the file it writes carries no record", !("groups" in (JSON.parse(serializeDoc(tornDown)) as object)))
+
+  const dissolved = updateNode(named, "b", { groupIds: undefined })
+  check("…as does dissolving the group with an update", dissolved.groups === undefined)
 }
 
 // -- z-order ----------------------------------------------------------------
@@ -437,6 +513,102 @@ const button = (id: string, x = 0, y = 0) => componentNode("button", { id, seed:
   const guessed = textNode("one two three four", { x: 0, y: 0, w: 120, seed: 1 })
   const measured = textNode("one two three four", { x: 0, y: 0, w: 120, seed: 1 }, wide)
   check("a measurer that knows the face wraps the words differently", measured.h > guessed.h)
+}
+
+// -- blueprints ------------------------------------------------------------
+
+/**
+ * A blueprint is a whole drawing handed over as data, so every rule a drawing
+ * has to keep applies to it: real nodes, connectors bound to boxes that are
+ * actually there, and a region whose members exist. It is also the one place
+ * most people will meet a boundary, which is why each one names exactly one.
+ */
+{
+  /** Two boxes sharing a pixel is a layout mistake nobody meant, so say which. */
+  const overlapping = (nodes: readonly SquigNode[]): string => {
+    const boxes = nodes.filter((n) => n.type === "component")
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i]
+        const b = boxes[j]
+        if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) return `${a.id} over ${b.id}`
+      }
+    }
+    return ""
+  }
+
+  check("there is a blueprint for each of the four", BLUEPRINTS.length === 4)
+  check("every blueprint is found by its id", BLUEPRINTS.every((bp) => findBlueprint(bp.id) === bp))
+
+  for (const bp of BLUEPRINTS) {
+    const { nodes, groups } = bp.build()
+    let built: SquigDocument | null = null
+    let refusal = ""
+    try {
+      // addNodes is the gate every node passes on its way into a document: it
+      // vouches each one and refuses a name that is already taken
+      built = addNodes(emptyDoc(bp.id, LOOK), nodes)
+    } catch (e) {
+      refusal = e instanceof DocError ? e.message : `${e}`
+    }
+    check(`blueprint "${bp.id}" builds nodes squig can draw`, !!built, refusal)
+    if (!built) continue
+    const doc = built
+
+    const inside = new Set(doc.order)
+    const arrows = nodesOf(doc).filter((n): n is ArrowNode => n.type === "arrow")
+    check(`"${bp.id}" connects its boxes`, arrows.length >= 3)
+    check(`"${bp.id}" says a word on every connector`, arrows.every((a) => !!a.label))
+    check(
+      `"${bp.id}" binds both ends, and only to boxes of its own`,
+      arrows.every((a) => !!a.bind && a.bind.every((id) => !!id && inside.has(id)))
+    )
+    check(`"${bp.id}" leaves no box on top of another`, overlapping(nodes) === "", overlapping(nodes))
+
+    const regions = Object.keys(groups)
+    const members = (id: string) => doc.order.filter((nodeId) => doc.nodes[nodeId].groupIds?.includes(id))
+    check(`"${bp.id}" names exactly one region`, regions.length === 1, regions.join(" "))
+    check(`"${bp.id}" gives it at least two members`, regions.every((id) => members(id).length >= 2))
+    check(
+      `"${bp.id}" keeps every group it mentions on the sheet`,
+      nodesOf(doc).every((n) => (n.groupIds ?? []).every((id) => regions.includes(id)))
+    )
+
+    // read at 100 percent on a laptop: a blueprint that needs scrolling to see
+    // is a picture of an architecture you can't read as one, and the top-right
+    // panel floats over the canvas, so "in sight" is narrower than the window
+    const box = docBounds(doc)
+    check(
+      `"${bp.id}" fits a laptop window at 100 percent`,
+      !!box && box.maxX - box.minX <= 820 && box.maxY - box.minY <= 520,
+      box ? `${Math.round(box.maxX - box.minX)} by ${Math.round(box.maxY - box.minY)}` : "no bounds"
+    )
+  }
+
+  // Two insertions of one blueprint are two drawings that look alike, not one
+  // drawing whose halves are each in both regions.
+  const first = placeBlueprint(BLUEPRINTS[0], { x: 400, y: 300 })
+  const second = placeBlueprint(BLUEPRINTS[0], { x: 400, y: 300 })
+  const names = new Set(first.nodes.map((n) => n.id))
+  const firstRegions = Object.keys(first.groups)
+  check("placing a blueprint mints a name per node", names.size === first.nodes.length)
+  check("…none of which the next placement reuses", second.nodes.every((n) => !names.has(n.id)))
+  check("…and neither does it reuse a region's", Object.keys(second.groups).every((id) => !firstRegions.includes(id)))
+  check(
+    "…while every member carries the region from its own build",
+    first.nodes.every((n) => (n.groupIds ?? []).every((id) => firstRegions.includes(id)))
+  )
+  check(
+    "…and every arrow is bound to a box of its own",
+    first.nodes.every((n) => n.type !== "arrow" || (n.bind ?? []).every((id) => !id || names.has(id)))
+  )
+  const placedBox = docBounds({...addNodes(emptyDoc("placed", LOOK), first.nodes), groups: first.groups})
+  check(
+    "a placed blueprint centres on the point it was given, boundary and all",
+    !!placedBox &&
+      Math.abs((placedBox.minX + placedBox.maxX) / 2 - 400) <= 1 &&
+      Math.abs((placedBox.minY + placedBox.maxY) / 2 - 300) <= 1
+  )
 }
 
 // -- a patch reaches only as far as it says -----------------------------------

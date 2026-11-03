@@ -239,6 +239,7 @@ export function createWebMCPTools(api: SquigAgentApi): WebMCPTool[] {
           to: arrowEnd,
           head: z.boolean().optional(),
           lineStyle: z.enum(["straight", "elbow", "curved"]).optional(),
+          label: nodeFields.shape.label,
           id: id.optional(),
           stroke: nodeFields.shape.stroke,
           ink: nodeFields.shape.ink,

@@ -26,6 +26,8 @@ export function renderSvg(document: CanvasDocument, variationId?: string) {
   const drawn = drawNodes(nodes, document.look, {
     measureText: textMeasurer(document.look.font),
     pad: PAD,
+    // the whole document's names, so a region prints under the nodes it holds
+    groups: document.groups,
   })
   // an empty canvas still renders, as a blank sheet at a plausible size
   const { body, x, y, w, h, paper } = drawn ?? {

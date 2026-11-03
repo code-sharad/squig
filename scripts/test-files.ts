@@ -289,6 +289,37 @@ function meta(id: string, updatedAt = 20_000, name = "in hand"): FileMeta {
   useSquig.getState().loadDoc(JSON.stringify(exported))
   check("importing an exported copy retains metadata", useSquig.getState().docId !== importedId && useSquig.getState().comments[0]?.text === "Keep feedback")
   useSquig.getState().saveNow()
+
+  // a boundary's name is document state: it has to come back out of the drawer
+  // after a save and a reopen, or naming a region is work that quietly expires
+  const regions = addNodes(emptyDoc("Regions"), [
+    componentNode("button", { id: "one", x: 0, y: 0 }),
+    componentNode("button", { id: "two", x: 200, y: 0 }),
+  ])
+  const named = {
+    ...regions,
+    nodes: {
+      one: { ...regions.nodes.one, groupIds: ["region"] },
+      two: { ...regions.nodes.two, groupIds: ["region"] },
+    },
+    groups: { region: { label: "aws us-east-1", at: "edge-left" } },
+  }
+  check("browser import accepts a boundary name", useSquig.getState().loadDoc(JSON.stringify(named)))
+  useSquig.getState().saveNow()
+  const regionId = useSquig.getState().docId
+  check(
+    "a boundary name survives a save",
+    JSON.stringify(readFile(regionId)?.groups) === JSON.stringify(named.groups),
+    JSON.stringify(readFile(regionId)?.groups),
+  )
+  useSquig.getState().newFile()
+  check("a new file starts with no names", Object.keys(useSquig.getState().groups).length === 0)
+  useSquig.getState().openFile(regionId)
+  check(
+    "…and the name comes back on reopen",
+    JSON.stringify(useSquig.getState().groups) === JSON.stringify(named.groups),
+    JSON.stringify(useSquig.getState().groups),
+  )
   const { useCanvasSyncIssue } = await import("../lib/agent/sync-status.ts")
   const guardedId = useSquig.getState().docId
   useCanvasSyncIssue.setState({ canLeaveLocalFile: () => false })

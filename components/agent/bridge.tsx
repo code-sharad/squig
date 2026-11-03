@@ -7,29 +7,16 @@ import { canvasConnection } from "@/lib/agent/credentials"
 import { Popover } from "@base-ui/react/popover"
 import { CopyIcon, CheckIcon, PlugsConnectedIcon } from "@phosphor-icons/react"
 import { applyLook } from "@/lib/theme"
-import { mergeCanvas, canvasEqual } from "@/lib/agent/merge"
+import { mergeCanvas, canvasEqual, canvasSnapshot, editableCanvas, type CanvasSnapshot } from "@/lib/agent/merge"
 import { listFiles, listRecentFiles, MAX_FILES, readFile, saveFile, type StoredDoc } from "@/lib/files"
 import "./agent.css"
 
-const snapshot = () => {
-  const s = useSquig.getState()
-  return {
-    fileName: s.fileName,
-    nodes: s.nodes,
-    order: s.order,
-    look: { theme: s.theme, font: s.font, paper: s.paper, grid: s.grid },
-  }
-}
-type Snapshot = ReturnType<typeof snapshot>
-const editable = (doc: Snapshot): Snapshot => ({
-  fileName: doc.fileName,
-  nodes: doc.nodes,
-  order: doc.order,
-  look: doc.look,
-})
+const snapshot = () => canvasSnapshot(useSquig.getState())
+type Snapshot = CanvasSnapshot
+const editable = editableCanvas
 const equal = canvasEqual
 const cachedSnapshot = (doc: StoredDoc) => ({
-  fileName: doc.name, nodes: doc.nodes, order: doc.order, look: doc.look,
+  fileName: doc.name, nodes: doc.nodes, order: doc.order, groups: doc.groups ?? {}, look: doc.look,
   variations: doc.variations ?? [], comments: doc.comments ?? [],
 })
 const portableSnapshot = () => {
@@ -110,9 +97,9 @@ export function AgentBridge({ hidden = false }: { hidden?: boolean }) {
       const rebaseHistory = (frames: typeof s.past) =>
         frames.flatMap((frame) => {
           const merged = mergeCanvas(
-            { nodes: s.nodes, order: s.order },
-            { nodes: frame.nodes, order: frame.order },
-            { nodes: doc.nodes, order: doc.order },
+            { nodes: s.nodes, order: s.order, groups: s.groups },
+            { nodes: frame.nodes, order: frame.order, groups: frame.groups },
+            { nodes: doc.nodes, order: doc.order, groups: doc.groups },
           )
           if (merged.conflicts.length) return []
           return [
@@ -130,6 +117,7 @@ export function AgentBridge({ hidden = false }: { hidden?: boolean }) {
         ...doc.look,
         nodes: doc.nodes,
         order: doc.order,
+        groups: doc.groups,
         fileName: doc.fileName,
         selection: s.selection.filter((nodeId) => !!doc.nodes[nodeId]),
         selectionGroupId: s.selectionGroupId,

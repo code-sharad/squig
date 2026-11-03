@@ -1,3 +1,59 @@
+import type { GroupStyles, SquigNode } from "@/lib/types"
+import type { Look } from "@/lib/theme"
+
+/**
+ * The canvas a browser and its companion both edit, and the whole set of
+ * fields a round trip carries.
+ *
+ * A field left out is not "unchanged": the companion's copy then says the
+ * document never had it, and the next merge reads the browser's value as an
+ * edit that deleted it. That is how a name typed on a boundary used to
+ * disappear on the way to the local file, so the list lives on a type that the
+ * bridge's snapshot must satisfy.
+ */
+export interface CanvasSnapshot {
+  fileName: string
+  nodes: Record<string, SquigNode>
+  order: string[]
+  /** names on groups, carried like the look — the browser is where they are typed */
+  groups: GroupStyles
+  look: Look
+}
+
+/** The store's document as the companion receives it. */
+export function canvasSnapshot(s: {
+  fileName: string
+  nodes: Record<string, SquigNode>
+  order: string[]
+  groups: GroupStyles
+  theme: Look["theme"]
+  font: Look["font"]
+  paper: Look["paper"]
+  grid: Look["grid"]
+}): CanvasSnapshot {
+  return {
+    fileName: s.fileName,
+    nodes: s.nodes,
+    order: s.order,
+    groups: s.groups,
+    look: { theme: s.theme, font: s.font, paper: s.paper, grid: s.grid },
+  }
+}
+
+/**
+ * A stored or companion document as the canvas this browser edits.
+ *
+ * A reply that leaves `groups` out means "no boundary names", not "none I am
+ * telling you about": the browser always holds the record, so a missing one
+ * normalized here is what keeps an idle canvas from looking like an edit.
+ */
+export function editableCanvas(
+  doc: Omit<CanvasSnapshot, "groups"> & { groups?: GroupStyles },
+): CanvasSnapshot {
+  const { fileName, nodes, order, groups, look } = doc
+  return { fileName, nodes, order, groups: groups ?? {}, look }
+}
+
 export function canvasEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (!a || !b || typeof a !== "object" || typeof b !== "object")

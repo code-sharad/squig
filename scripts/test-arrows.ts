@@ -25,7 +25,8 @@ import {
   withTarget,
 } from "../lib/canvas/arrow-binding.ts"
 import { normalizeArrowAnchors, normalizeBind, type ArrowNode, type ShapeNode, type SquigNode } from "../lib/types.ts"
-import { arrowRouteBounds, localArrowRoute, nodeVisualBounds, sampleArrowRoute, worldRouteHandle } from "../lib/canvas/line-routing.ts"
+import { arrowRouteBounds, localArrowRoute, localRouteMidpoint, nodeVisualBounds, sampleArrowRoute, worldRouteHandle } from "../lib/canvas/line-routing.ts"
+import { parseDoc, serializeDoc } from "../lib/doc.ts"
 import { check, report } from "./harness.ts"
 
 const close = (a: number, b: number, eps = 1e-6) => Math.abs(a - b) <= eps
@@ -119,6 +120,47 @@ function doc(list: SquigNode[]): Record<string, SquigNode> {
   const deepBounds = arrowRouteBounds(deep)
   check("curve: exact bounds include an extreme manual midpoint", close(deepBounds.y + deepBounds.h, 1000))
   check("visual bounds: routed arrows use their visible path", nodeVisualBounds(deep).h > deep.h)
+}
+
+// -- a word on the line -----------------------------------------------------
+
+{
+  pointIs("label: a straight run is labelled halfway along it", localRouteMidpoint(localArrowRoute(arrow({}))), [50, 0])
+
+  const dogleg = arrow({ lineStyle: "elbow", h: 100, points: [[0, 0], [100, 100]] })
+  pointIs("label: a symmetric dogleg is labelled on its middle run", localRouteMidpoint(localArrowRoute(dogleg)), [50, 50])
+
+  const curved = arrow({ lineStyle: "curved" })
+  pointIs("label: a curve is labelled at its midpoint", localRouteMidpoint(localArrowRoute(curved)), [50, -16])
+}
+
+{
+  const bare = arrow({ lineStyle: "elbow", w: 10, h: 200, points: [[0, 0], [10, 200]] })
+  const labelled: ArrowNode = { ...bare, label: "on the bend" }
+  check(
+    "label: the pad reaches wider than the route, so it is in the visual bounds",
+    arrowRouteBounds(labelled).x < arrowRouteBounds(bare).x
+  )
+}
+
+{
+  const written = JSON.stringify({
+    app: "squig",
+    version: 1,
+    fileName: "labels",
+    nodes: { line: arrow({ id: "line", label: "  go   here\nnow " }) },
+    order: ["line"],
+  })
+  const read = parseDoc(written)
+  const line = read?.nodes.line
+  check(
+    "label: a document round trip keeps the word",
+    line?.type === "arrow" && line.label === "go here now",
+    line?.type === "arrow" ? line.label : line?.type
+  )
+  const again = read ? parseDoc(serializeDoc(read)) : null
+  const reread = again?.nodes.line
+  check("…and so does a second one", reread?.type === "arrow" && reread.label === "go here now")
 }
 
 // -- the ray, against a rectangle -------------------------------------------

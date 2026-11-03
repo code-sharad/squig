@@ -47,6 +47,7 @@ function reset() {
   useSquig.setState({
     nodes: {},
     order: [],
+    groups: {},
     selection: [],
     selectionGroupId: null,
     clipboard: [],
@@ -336,6 +337,58 @@ const docJson = () => JSON.stringify({ nodes: s().nodes, order: s().order })
     stroke.map((p) => p.join()).join(" ") === "0,0 10,4 20,1",
     JSON.stringify(stroke)
   )
+}
+
+// -- a blueprint lands and lifts as one thing -------------------------------
+
+{
+  // The whole promise of the feature: an architecture arrives as one act, and
+  // ⌘Z does not leave half a drawing behind or, worse, a region drawn around
+  // nothing.
+  reset()
+  const steps = s().past.length
+  s().insertBlueprint("chat")
+  const ids = [...s().selection]
+  check("inserting a blueprint is one undo step", s().past.length === steps + 1)
+  check("…which lands with every box and connector selected", ids.length === s().order.length && ids.length > 3)
+  check("…and names its region", Object.keys(s().groups).length === 1)
+  check("…whose members are the boxes it drew", s().order.filter((id) => s().nodes[id].groupIds?.length).length >= 2)
+
+  s().undo()
+  check("⌘Z lifts the whole blueprint off", s().order.length === 0)
+  check("…including its boundary name", Object.keys(s().groups).length === 0)
+  s().redo()
+  check("⇧⌘Z hands it all back", s().order.join() === ids.join(), s().order.join())
+  check("…with the boundary it was drawn around", Object.keys(s().groups).length === 1)
+
+  // a second insertion has to be a second drawing: sharing a node id would
+  // overwrite the first, and sharing a region id would merge the two
+  s().insertBlueprint("chat")
+  const secondIds = [...s().selection]
+  check("a second insertion doubles the sheet", s().order.length === ids.length * 2)
+  check("…without overwriting a single box", new Set(s().order).size === s().order.length)
+  check("…and with a region of its own", Object.keys(s().groups).length === 2)
+  s().undo()
+  check("one ⌘Z takes the second one and leaves the first", s().order.join() === ids.join())
+
+  // two architectures side by side is the reason to ask for a second one, so a
+  // blueprint must not land inside the first one's boxes
+  {
+    const bounds = (pick: string[]) => {
+      const bs = pick.map((id) => s().nodes[id]).filter(Boolean).map((n) => ({ x: n.x, y: n.y, w: n.w, h: n.h }))
+      return {
+        minX: Math.min(...bs.map((b) => b.x)),
+        minY: Math.min(...bs.map((b) => b.y)),
+        maxX: Math.max(...bs.map((b) => b.x + b.w)),
+        maxY: Math.max(...bs.map((b) => b.y + b.h)),
+      }
+    }
+    const first = bounds(ids)
+    const second = bounds(secondIds)
+    const apart =
+      second.minX > first.maxX || second.maxX < first.minX || second.minY > first.maxY || second.maxY < first.minY
+    check("the second blueprint stands clear of the first", apart, JSON.stringify({ first, second }))
+  }
 }
 
 // ---------------------------------------------------------------------------

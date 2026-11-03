@@ -81,9 +81,16 @@ function decode(raw: string): LocalContent {
     value.order.some((key) => typeof key !== "string" || !Object.hasOwn(parsed.nodes, key))) {
     throw new AgentError(400, "The local file is not a complete Squig document. Fix it or choose another file; it has not been replaced.")
   }
-  const { app: _app, version: _version, comments, ...metadata } = value
+  // `groups` is taken from the parse, never from here. parseDoc is the only
+  // thing that turns a stranger's record into a GroupStyle, and it drops the
+  // field outright when nothing in it survives; spreading the raw value back in
+  // would republish a label longer than the format allows, or a placement the
+  // renderer cannot draw, because validateDocument settles groups by
+  // membership alone and never looks at their shape.
+  const { app: _app, version: _version, comments, groups: _groups, ...metadata } = value
   void _app
   void _version
+  void _groups
   return {
     document: validateDocument({
       ...metadata, ...parsed,

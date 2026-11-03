@@ -17,7 +17,7 @@
 import { componentNode, shapeNode, textNode } from "../lib/doc.ts"
 import { EXPORT_PAD, loadIconsFor, renderSvg } from "../lib/sketch/svg.ts"
 import { bgOf, DEFAULT_LOOK, paletteOf, type Look } from "../lib/theme.ts"
-import type { ImageNode, SquigNode } from "../lib/types.ts"
+import type { ArrowNode, ImageNode, SquigNode } from "../lib/types.ts"
 import { check, report } from "./harness.ts"
 
 // -- fixtures ---------------------------------------------------------------
@@ -90,6 +90,24 @@ const gs = (svg: string) => (svg.match(/<g transform="translate\(/g) ?? []).leng
   check("…leaving no tag behind", !svg.includes("<b>"))
 }
 
+// -- a connector's word sits on its own paper -------------------------------
+
+{
+  const arrow: ArrowNode = { id: "arrow", seed: 16, type: "arrow", head: true, x: 0, y: 0, w: 200, h: 40, points: [[0, 0], [200, 40]], label: "sign in" }
+  const svg = renderSvg([arrow], LOOK)
+  const pad = new RegExp(
+    `<path d="[^"]*" stroke="none" stroke-width="0" fill="${paletteOf(LOOK.theme).paper}"`
+  )
+  check("a labelled connector prints its word", svg.includes(">sign in</text>"))
+  check("…on an opaque paper pad", pad.test(svg))
+  check("…and the pad is behind the word", svg.search(pad) < svg.indexOf(">sign in</text>"))
+}
+
+{
+  const stub: ArrowNode = { id: "stub", seed: 17, type: "arrow", head: true, x: 0, y: 0, w: 30, h: 0, points: [[0, 0], [30, 0]], label: "a word with nowhere to go" }
+  check("a word longer than its stub is not printed", !renderSvg([stub], LOOK).includes("nowhere"))
+}
+
 // -- a pasted picture travels with the file ---------------------------------
 
 {
@@ -100,6 +118,38 @@ const gs = (svg: string) => (svg.match(/<g transform="translate\(/g) ?? []).leng
   const svg = renderSvg([img as SquigNode], LOOK)
   check("a pasted picture is written into the svg", svg.includes('<image href="data:image/png;base64,'))
   check("…in full", svg.includes(PIXEL))
+}
+
+// -- a named group prints as a boundary -------------------------------------
+
+{
+  // the box is the members' union plus the padding the canvas draws around
+  // them, so the viewBox has to be measured from the boundary rather than the
+  // nodes: otherwise the dashed line is cropped off the picture
+  const grouped = [
+    { ...box, groupIds: ["region"] },
+    { ...btn, groupIds: ["region"] },
+  ]
+  const groups = { region: { label: "aws us-east-1" } }
+  const svg = renderSvg(grouped, LOOK, "paper", undefined, groups)
+  check("an exported boundary prints its name", svg.includes(">aws us-east-1</text>"))
+  check("…and is drawn before the nodes it holds", svg.indexOf('translate(-24 -4)') < svg.indexOf('translate(10 20)'))
+  const vb = svg.match(/viewBox="([^"]+)"/)?.[1].split(" ").map(Number)
+  // union of the two boxes is x 0..132, y 20..140; plus 24, plus the export pad
+  check(
+    "…and the export grows to hold its box",
+    JSON.stringify(vb) === JSON.stringify([-24 - EXPORT_PAD, -4 - EXPORT_PAD, 180 + EXPORT_PAD * 2, 168 + EXPORT_PAD * 2]),
+    JSON.stringify(vb)
+  )
+
+  const pad = new RegExp(`<path d="[^"]*" stroke="none" stroke-width="0" fill="${paletteOf(LOOK.theme).paper}"`)
+  const edge = renderSvg(grouped, LOOK, "paper", undefined, { region: { label: "aws", at: "edge-center" } })
+  check("an edge name sits on a paper pad", edge.includes(">aws</text>") && pad.test(edge))
+  check("…that prints before the words", edge.search(pad) < edge.indexOf(">aws</text>"))
+
+  check("an unnamed group draws nothing", !renderSvg(grouped, LOOK).includes("aws"))
+  const stale = renderSvg(grouped, LOOK, "paper", undefined, { gone: { label: "ghost" } })
+  check("a name whose group has no members draws nothing", !stale.includes("ghost"))
 }
 
 // -- the same drawing renders the same bytes --------------------------------

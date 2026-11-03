@@ -17,7 +17,7 @@ import {
   validNode,
   wordsOf,
 } from "../lib/clipboard-payload.ts"
-import type { ImageNode, ShapeNode, SquigNode, TextNode } from "../lib/types.ts"
+import type { ArrowNode, ImageNode, ShapeNode, SquigNode, TextNode } from "../lib/types.ts"
 import { check, report } from "./harness.ts"
 
 const rect = (id: string, x = 0, y = 0): ShapeNode => ({
@@ -109,6 +109,29 @@ function pic(src: string): ImageNode {
   check("but never a url we'd go and fetch", validNode(pic("https://example.com/tracker.png")) === null)
   check("and not a script either", validNode(pic("javascript:alert(1)")) === null)
   check("a payload drops the bad ones and keeps the rest", decodeNodes(encodeNodes([rect("a"), pic("http://x/y.png") as SquigNode]))?.length === 1)
+}
+
+// -- a connector's word -----------------------------------------------------
+
+{
+  const arrow: ArrowNode = { id: "arr", type: "arrow", x: 0, y: 0, w: 200, h: 0, seed: 9, head: true, points: [[0, 0], [200, 0]], label: "go here" }
+  const back = decodeNodes(encodeNodes([arrow]))
+  check("an arrow label survives copy and paste", back?.[0].type === "arrow" && back[0].label === "go here")
+
+  const cleaned = validNode({ ...arrow, label: "  Step   one\nnow " })
+  check("a pasted label is flattened to one line", cleaned?.type === "arrow" && cleaned.label === "Step one now")
+
+  const long = validNode({ ...arrow, label: "word ".repeat(60) })
+  check(
+    "a label too long to fit is cut at 120 characters",
+    long?.type === "arrow" && (long.label?.length ?? 0) <= 120 && (long.label?.length ?? 0) > 100
+  )
+
+  const empty = validNode({ ...arrow, label: "   " })
+  check("an empty label is the same as none", empty?.type === "arrow" && empty.label === undefined)
+
+  const wrong = validNode({ ...arrow, label: 42 })
+  check("…and so is one that isn't words", wrong?.type === "arrow" && wrong.label === undefined)
 }
 
 // -- the plain-text carrier -------------------------------------------------

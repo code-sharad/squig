@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSquig } from "@/lib/store"
 import { arrangement } from "@/lib/canvas/arrange"
 import { ALL_DEFS, matches, type ComponentDef } from "@/lib/library/registry"
+import { BLUEPRINTS } from "@/lib/library/system-templates"
 import { searchNodes, type NodeHit } from "@/lib/canvas/find"
 import { SketchPrims } from "@/components/canvas/sketch"
 import { getIconPaths, loadIconWeight } from "@/lib/sketch/icon-catalog"
@@ -68,6 +69,7 @@ import {
   EyeSlashIcon,
   ImageIcon,
   KeyboardIcon,
+  BlueprintIcon,
   type Icon as PhosphorIcon,
 } from "@phosphor-icons/react"
 
@@ -92,7 +94,7 @@ type Row =
 // drawing — if the words you typed are already on the canvas, that is almost
 // certainly what you meant. It is also the section that is usually empty: a
 // board of six rectangles has no words, so the header never appears.
-const SECTION_ORDER = ["Jump to", "Tools", "Edit", "Arrange", "Text", "View", "File", "Recent", "Components", "Blocks", "Icons"]
+const SECTION_ORDER = ["Jump to", "Tools", "Edit", "Arrange", "Text", "View", "File", "Recent", "Blueprints", "Components", "Blocks", "Icons"]
 
 /** a handful of places to go — past that you should be looking, not reading */
 const JUMPS_IN_PALETTE = 6
@@ -228,6 +230,17 @@ function Palette() {
       { id: "export-png", label: "Export PNG", section: "File", keywords: "save download image picture raster file ticket deck attach", icon: FilePngIcon, run: () => saveImageWithNotice("png") },
       { id: "export-svg", label: "Export SVG", section: "File", keywords: "save download vector image file print sharp scale", icon: FileSvgIcon, run: () => saveImageWithNotice("svg") },
       { id: "import", label: "Import .squig", section: "File", keywords: "open load json disk", icon: UploadSimpleIcon, run: importDoc },
+
+      // a blueprint is a whole drawing, so it keeps a section of its own. In
+      // amongst the commands it would read as one more thing to toggle
+      ...BLUEPRINTS.map((bp) => ({
+        id: `blueprint:${bp.id}`,
+        label: bp.title,
+        section: "Blueprints",
+        keywords: `blueprint architecture diagram template ${bp.description}`,
+        icon: BlueprintIcon,
+        run: () => st().insertBlueprint(bp.id),
+      })),
 
       // every file this browser is holding, so ⌘K can open one too
       ...files

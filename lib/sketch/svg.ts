@@ -12,15 +12,16 @@
 
 import type { ExportSurface } from "@/lib/export-image-document"
 import { svgDocument } from "@/lib/export-image-document"
+import { boundaryList, boundaryPrims, type Boundary } from "@/lib/canvas/boundary"
 import { rotationTransform } from "@/lib/canvas/rotation"
 import { nodeVisualBounds } from "@/lib/canvas/line-routing"
 import type { TextMeasurer } from "@/lib/canvas/text-metrics"
 import { iconPathsReady, loadIconWeight, normalizeIconWeight, type IconWeight } from "./icon-catalog"
-import { INK, resolveIconName } from "./kit"
+import { INK, resolveIconName, type Prim } from "./kit"
 import { nodePrims } from "./node-prims"
 import { imagePlacement, mirrorBox, mirrorGlyphs, primsToPaths } from "./paths"
 import { bgOf, FONT_STACK, paletteOf, type Look, type Palette } from "@/lib/theme"
-import type { SquigNode } from "@/lib/types"
+import type { GroupStyles, SquigNode } from "@/lib/types"
 
 /** breathing room around the art, in world units — rough strokes overshoot */
 export const EXPORT_PAD = 12
@@ -46,40 +47,17 @@ export function makeResolver(p: Palette): (paint: string) => string {
 }
 
 /**
- * One node, as SVG markup.
- *
- * Deliberately a mirror of what SketchPrims renders — same paths, same
- * attributes, same order. It is duplicated rather than run through
- * react-dom/server because pulling a server renderer into the client bundle to
- * print thirty lines of markup is a poor trade.
+ * A list of prims as markup: the half of a node an exporter prints, and all
+ * of a boundary.
  */
-export function nodeMarkup(
-  node: SquigNode,
+function primsMarkup(
+  prims: Prim[],
+  seed: number,
   resolve: (paint: string) => string,
-  font: string,
-  measureText?: TextMeasurer
+  font: string
 ): string {
-  const { paths, texts, crisp } = primsToPaths(nodePrims(node, measureText), node.seed)
+  const { paths, texts, crisp } = primsToPaths(prims, seed)
   const out: string[] = []
-
-  // A pasted picture is the one node that isn't made of marks, so it has to be
-  // written out itself or the PNG comes back with an empty frame where the
-  // screenshot was. Its pixels are already a data URL, which is both what
-  // makes the SVG standalone and what keeps the canvas untainted when this is
-  // rasterised — an external src would do neither.
-  if (node.type === "image") {
-    const mirror = mirrorBox(node.w, node.h, node.flipX, node.flipY)
-    const p = imagePlacement(node)
-    // the nested <svg> is the crop, exactly as the canvas draws it — a viewport
-    // the size of the box, trimming a picture laid out larger than it
-    out.push(
-      `<svg x="0" y="0" width="${node.w}" height="${node.h}" overflow="hidden">` +
-        `<g${mirror ? ` transform="${esc(mirror)}"` : ""}>` +
-        `<image href="${esc(node.src)}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}"` +
-        ` preserveAspectRatio="none"/>` +
-        `</g></svg>`
-    )
-  }
 
   for (const p of paths) {
     out.push(
@@ -112,10 +90,55 @@ export function nodeMarkup(
         `${mirror ? ` transform="${esc(mirror)}"` : ""} xml:space="preserve">${esc(t.text)}</text>`
     )
   }
+  return out.join("")
+}
+
+/**
+ * One node, as SVG markup.
+ *
+ * Deliberately a mirror of what SketchPrims renders: same paths, same
+ * attributes, same order. It is duplicated rather than run through
+ * react-dom/server because pulling a server renderer into the client bundle to
+ * print thirty lines of markup is a poor trade.
+ */
+export function nodeMarkup(
+  node: SquigNode,
+  resolve: (paint: string) => string,
+  font: string,
+  measureText?: TextMeasurer
+): string {
+  const out: string[] = []
+
+  // A pasted picture is the one node that isn't made of marks, so it has to be
+  // written out itself or the PNG comes back with an empty frame where the
+  // screenshot was. Its pixels are already a data URL, which is both what
+  // makes the SVG standalone and what keeps the canvas untainted when this is
+  // rasterised; an external src would do neither.
+  if (node.type === "image") {
+    const mirror = mirrorBox(node.w, node.h, node.flipX, node.flipY)
+    const p = imagePlacement(node)
+    // the nested <svg> is the crop, exactly as the canvas draws it: a viewport
+    // the size of the box, trimming a picture laid out larger than it
+    out.push(
+      `<svg x="0" y="0" width="${node.w}" height="${node.h}" overflow="hidden">` +
+        `<g${mirror ? ` transform="${esc(mirror)}"` : ""}>` +
+        `<image href="${esc(node.src)}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}"` +
+        ` preserveAspectRatio="none"/>` +
+        `</g></svg>`
+    )
+  }
+
+  out.push(primsMarkup(nodePrims(node, measureText), node.seed, resolve, font))
 
   const rotation = rotationTransform(node)
   const body = rotation ? `<g transform="${rotation}">${out.join("")}</g>` : out.join("")
   return `<g transform="translate(${node.x} ${node.y})">${body}</g>`
+}
+
+/** A boundary's marks, placed where its box sits, before any node, so it prints behind the content. */
+function boundaryMarkup(boundary: Boundary, resolve: (paint: string) => string, font: string): string {
+  const body = primsMarkup(boundaryPrims(boundary.style, boundary.w, boundary.h), boundary.seed, resolve, font)
+  return `<g transform="translate(${boundary.x} ${boundary.y})">${body}</g>`
 }
 
 /**
@@ -144,17 +167,19 @@ export async function loadIconsFor(list: readonly SquigNode[]): Promise<void> {
  * one the text prims fall back to an em-ratio guess, which is close enough for
  * a preview and wrong enough to wrap a fixed-width paragraph in the wrong
  * places. `pad` is the breathing room around the art; the export wants a hair,
- * the agent's PNG wants a margin.
+ * the agent's PNG wants a margin. `groups` are the document's named
+ * boundaries, drawn first and counted in the bounds.
  */
 export function drawNodes(
   list: readonly SquigNode[],
   look: Look,
-  opts: { font?: string; measureText?: TextMeasurer; pad?: number } = {}
+  opts: { font?: string; measureText?: TextMeasurer; pad?: number; groups?: GroupStyles } = {}
 ): { body: string; x: number; y: number; w: number; h: number; paper: string } | null {
   if (!list.length) return null
-  const { font = FONT_STACK[look.font], measureText, pad = EXPORT_PAD } = opts
+  const { font = FONT_STACK[look.font], measureText, pad = EXPORT_PAD, groups } = opts
   const palette = paletteOf(look.theme)
   const resolve = makeResolver(palette)
+  const boundaries = boundaryList(list, groups)
   // routed connectors can bow or dogleg outside the endpoint box stored on
   // the node; measure the visible path so nothing crops a manual bend
   let minX = Infinity
@@ -168,8 +193,18 @@ export function drawNodes(
     maxX = Math.max(maxX, b.x + b.w)
     maxY = Math.max(maxY, b.y + b.h)
   }
+  // a boundary sits outside its members, so the art is wider than the nodes and
+  // a viewBox measured from them alone would cut the line off
+  for (const b of boundaries) {
+    minX = Math.min(minX, b.x)
+    minY = Math.min(minY, b.y)
+    maxX = Math.max(maxX, b.x + b.w)
+    maxY = Math.max(maxY, b.y + b.h)
+  }
   return {
-    body: list.map((n) => nodeMarkup(n, resolve, font, measureText)).join(""),
+    body:
+      boundaries.map((b) => boundaryMarkup(b, resolve, font)).join("") +
+      list.map((n) => nodeMarkup(n, resolve, font, measureText)).join(""),
     x: minX - pad,
     y: minY - pad,
     w: Math.max(maxX - minX + pad * 2, 1),
@@ -183,14 +218,16 @@ export function drawNodes(
  * asked for a transparent sheet. Empty input gives an empty string rather than
  * a blank picture, so a caller can tell the two apart. Synchronous: a caller
  * that hasn't already drawn these nodes on screen awaits loadIconsFor first.
+ * `groups` names the boundaries to draw behind them.
  */
 export function renderSvg(
   list: readonly SquigNode[],
   look: Look,
   surface: ExportSurface = "paper",
-  measureText?: TextMeasurer
+  measureText?: TextMeasurer,
+  groups?: GroupStyles
 ): string {
-  const d = drawNodes(list, look, { measureText })
+  const d = drawNodes(list, look, { measureText, groups })
   if (!d) return ""
   return `<?xml version="1.0" encoding="UTF-8"?>\n${svgDocument({ ...d, css: "" }, d.w, d.h, surface)}`
 }

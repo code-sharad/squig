@@ -18,8 +18,9 @@ import { useEffect } from "react"
 
 import { useSquig } from "@/lib/store"
 import { arrangement } from "@/lib/canvas/arrange"
-import type { ArrowNode, ComponentNode, FillTone, ImageNode, InkTone, LineStyle, ShapeNode, SquigNode, StrokeWeight, TextNode } from "@/lib/types"
-import { normalizeFill, normalizeInk, normalizeStroke } from "@/lib/types"
+import type { ArrowNode, BoundaryLabelAt, ComponentNode, FillTone, ImageNode, InkTone, LineStyle, ShapeNode, SquigNode, StrokeWeight, TextNode } from "@/lib/types"
+import { normalizeFill, normalizeGroupStyle, normalizeInk, normalizeLabel, normalizeStroke } from "@/lib/types"
+import { groupMembers } from "@/lib/canvas/groups"
 import { isCropped, trueShapePatch } from "@/lib/canvas/crop"
 import { getDef } from "@/lib/library/registry"
 import { lockedIds, selectionSummary, shared, sharedControls, sharedNumber, unionBounds } from "@/lib/selection"
@@ -41,6 +42,7 @@ import { openPanelSection, Panel, PanelFooter, PanelHeader, PanelNote, PanelSect
 import { IconAction, Segmented, type SegmentOption } from "@/components/ui/segmented"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   ArrowCounterClockwiseIcon,
@@ -167,6 +169,16 @@ const LINE_INK_OPTIONS: readonly SegmentOption<InkTone>[] = [
   { value: "faint", label: "Faint", content: <InkDot color="var(--sq-faint)" /> },
 ]
 
+/** The six places a boundary's name can sit, in the order they move across the box. */
+const BOUNDARY_AT_OPTIONS: readonly { value: BoundaryLabelAt; label: string }[] = [
+  { value: "inside-left", label: "Inside, left" },
+  { value: "inside-center", label: "Inside, center" },
+  { value: "inside-right", label: "Inside, right" },
+  { value: "edge-left", label: "Top edge, left" },
+  { value: "edge-center", label: "Top edge, center" },
+  { value: "edge-right", label: "Top edge, right" },
+]
+
 // ---------------------------------------------------------------------------
 
 export function Inspector() {
@@ -200,7 +212,14 @@ export function Inspector() {
         {/* remounting on a selection change drops any half-typed draft, which
             is what you want — the field now describes different objects */}
         <div key={selection.join(",")} className="flex flex-col">
-          {empty ? <PageSettings /> : <SelectionEditor selected={selected} />}
+          {empty ? (
+            <PageSettings />
+          ) : (
+            <>
+              <BoundarySection />
+              <SelectionEditor selected={selected} />
+            </>
+          )}
         </div>
       </ScrollArea>
 
@@ -712,6 +731,17 @@ function SelectionEditor({ selected }: { selected: SquigNode[] }) {
               onChange={(on) => patch((n) => (n.type === "arrow" ? ({ head: on } as Partial<SquigNode>) : null))}
             />
           </Row>
+          {arrows.length === 1 && (
+            <Row label="Label">
+              <MixedTextField
+                ariaLabel="Label"
+                shared={shared(arrows.map((n) => n.label ?? ""))}
+                onCommit={(v) =>
+                  patch((n) => (n.type === "arrow" ? ({ label: normalizeLabel(v) } as Partial<SquigNode>) : null))
+                }
+              />
+            </Row>
+          )}
           <Row spread label="Snap" help="Connects endpoints to nearby layers.">
             <MixedSwitch
               ariaLabel="Snap to objects"
@@ -761,6 +791,70 @@ function SelectionEditor({ selected }: { selected: SquigNode[] }) {
         </>
       )}
     </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * A group's name, which is the whole of a boundary. It appears only when the
+ * selection is exactly one group: naming three selected leaves would have to
+ * invent a group, and stepping into a group to read its name would be a worse
+ * surprise than the section simply being there when the group is picked.
+ *
+ * An empty name is not a second state to edit, it is the way back to an
+ * invisible group, so clearing the field removes the record.
+ */
+function BoundarySection() {
+  const st = useSquig.getState
+  const nodes = useSquig((s) => s.nodes)
+  const order = useSquig((s) => s.order)
+  const selection = useSquig((s) => s.selection)
+  const groupId = useSquig((s) => s.selectionGroupId)
+  const groups = useSquig((s) => s.groups)
+
+  if (!groupId) return null
+  const members = groupMembers(groupId, nodes, order)
+  if (!members.length || members.length !== selection.length) return null
+
+  const style = groups[groupId]
+  const at = style?.at ?? "inside-left"
+  const save = (label: string, placement: BoundaryLabelAt) =>
+    st().setGroupStyle(groupId, normalizeGroupStyle({ label, at: placement }) ?? null)
+
+  return (
+    <PanelSection id="boundary" title="Boundary">
+      <Row label="Name" help="Names this group and draws a dashed box around its members.">
+        <MixedTextField
+          ariaLabel="Boundary name"
+          placeholder="Add a name"
+          shared={{ mixed: false, value: style?.label ?? "" }}
+          onCommit={(value) => save(value, at)}
+        />
+      </Row>
+      <Row
+        label="Placement"
+        help={style ? "Places the name on the boundary." : "Available once the group has a name."}
+      >
+        <Select
+          value={at}
+          disabled={!style}
+          onValueChange={(value) => save(style?.label ?? "", value as BoundaryLabelAt)}
+        >
+          <SelectTrigger size="sm" aria-label="Boundary label placement" className="h-ctl w-full">
+            {/* the stored value is an id, so the trigger has to say the words */}
+            <SelectValue>{BOUNDARY_AT_OPTIONS.find((option) => option.value === at)?.label}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {BOUNDARY_AT_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Row>
+    </PanelSection>
   )
 }
 

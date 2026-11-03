@@ -4,6 +4,14 @@ import { MAX_COORD } from "../doc"
 export const id = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/)
 const finite = z.number().finite().min(-MAX_COORD).max(MAX_COORD)
 const point = z.tuple([finite, finite])
+/** A named boundary, as a whole-document replace may spell it. */
+export const groupsSchema = z.record(
+  z.string().max(80),
+  z.object({
+    label: z.string().min(1).max(80),
+    at: z.enum(["inside-left", "inside-center", "inside-right", "edge-left", "edge-center", "edge-right"]).optional(),
+  }),
+)
 export const nodeFields = z
   .object({
     x: finite,
@@ -47,6 +55,7 @@ export const nodeFields = z
       ])
       .optional(),
     lineStyle: z.enum(["straight", "elbow", "curved"]).optional(),
+    label: z.string().max(120).optional(),
     elbowAxis: z.enum(["x", "y"]).optional(),
     elbowOffset: point.optional(),
     curveBend: point.optional(),
@@ -114,6 +123,7 @@ export const operation = z.discriminatedUnion("op", [
                 "anchors",
                 "snap",
                 "lineStyle",
+                "label",
                 "elbowAxis",
                 "elbowOffset",
                 "curveBend",
@@ -260,6 +270,7 @@ export const tools = {
         nodes: z.record(z.string(), z.unknown()),
         order: z.array(id),
         look: lookSchema.optional(),
+        groups: groupsSchema.optional(),
       }),
     }),
   },
