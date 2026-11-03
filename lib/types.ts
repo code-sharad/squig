@@ -218,6 +218,11 @@ export interface ArrowNode extends BaseNode, Outlined {
    * its endpoints. This makes a bend follow when connected boxes move.
    */
   curveBend?: [number, number]
+  /**
+   * A word on the line, printed on a paper pad at the middle of the route.
+   * Absent is the ordinary unlabelled connector, and the only spelling of it.
+   */
+  label?: string
 }
 
 /**
@@ -234,6 +239,21 @@ export function normalizeBind(v: unknown): ArrowBind | undefined {
   const a = end(v[0])
   const b = end(v[1])
   return a || b ? [a, b] : undefined
+}
+
+/**
+ * Words we're willing to print on a connector, or undefined for none.
+ *
+ * A label is one line: a newline pasted in from somewhere else becomes a space
+ * rather than a second run the pad has no room for. The cap keeps one paste
+ * from turning a connector into a paragraph, since the type size is fixed and
+ * the words are placed on whatever line happens to be there.
+ */
+export function normalizeLabel(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined
+  const flat = v.replace(/\s+/g, " ").trim()
+  if (!flat) return undefined
+  return flat.slice(0, 120).trimEnd()
 }
 
 /** Anchors from an imported document, with anchors on free ends discarded. */

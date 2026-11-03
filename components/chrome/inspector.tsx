@@ -19,7 +19,7 @@ import { useEffect } from "react"
 import { useSquig } from "@/lib/store"
 import { arrangement } from "@/lib/canvas/arrange"
 import type { ArrowNode, ComponentNode, FillTone, ImageNode, InkTone, LineStyle, ShapeNode, SquigNode, StrokeWeight, TextNode } from "@/lib/types"
-import { normalizeFill, normalizeInk, normalizeStroke } from "@/lib/types"
+import { normalizeFill, normalizeInk, normalizeLabel, normalizeStroke } from "@/lib/types"
 import { isCropped, trueShapePatch } from "@/lib/canvas/crop"
 import { getDef } from "@/lib/library/registry"
 import { lockedIds, selectionSummary, shared, sharedControls, sharedNumber, unionBounds } from "@/lib/selection"
@@ -712,6 +712,17 @@ function SelectionEditor({ selected }: { selected: SquigNode[] }) {
               onChange={(on) => patch((n) => (n.type === "arrow" ? ({ head: on } as Partial<SquigNode>) : null))}
             />
           </Row>
+          {arrows.length === 1 && (
+            <Row label="Label">
+              <MixedTextField
+                ariaLabel="Label"
+                shared={shared(arrows.map((n) => n.label ?? ""))}
+                onCommit={(v) =>
+                  patch((n) => (n.type === "arrow" ? ({ label: normalizeLabel(v) } as Partial<SquigNode>) : null))
+                }
+              />
+            </Row>
+          )}
           <Row spread label="Snap" help="Connects endpoints to nearby layers.">
             <MixedSwitch
               ariaLabel="Snap to objects"

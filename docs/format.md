@@ -152,6 +152,7 @@ will settle it on the next edit.
 | `lineStyle` | `straight` (absent), `elbow`, `curved`. |
 | `elbowAxis`, `elbowOffset` | a reshaped elbow's first run axis and its offset from the automatic midpoint. |
 | `curveBend` | a curve's draggable midpoint, as an offset from the midpoint of its ends. |
+| `label` | one line of words, printed on a paper pad at the middle of the route. Absent means no label. |
 
 ### draw
 

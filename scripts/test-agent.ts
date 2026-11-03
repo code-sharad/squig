@@ -98,6 +98,32 @@ check("six nodes plus the note", d.order.length === 7)
 check("the variation stuck", d.variations.length === 1)
 check("an arrow came back an arrow", d.nodes.line.type === "arrow")
 
+// -- a connector's word -----------------------------------------------------
+
+{
+  const labelled = applyOperations(
+    d,
+    operation.array().parse([
+      { op: "update", patches: [{ id: "line", patch: { label: "  take  this\tpath " } }] },
+    ]),
+  ).document
+  const line = labelled.nodes.line
+  check(
+    "an agent patch can set a connector label",
+    line.type === "arrow" && line.label === "take this path",
+    line.type === "arrow" ? line.label : line.type,
+  )
+
+  const cleared = applyOperations(
+    labelled,
+    operation.array().parse([
+      { op: "update", patches: [{ id: "line", unset: ["label"] }] },
+    ]),
+  ).document
+  const bare = cleared.nodes.line
+  check("…and unset it again", bare.type === "arrow" && bare.label === undefined)
+}
+
 // -- a batch is all or nothing ----------------------------------------------
 
 const before = JSON.stringify(d)

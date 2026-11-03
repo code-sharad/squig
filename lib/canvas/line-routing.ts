@@ -10,6 +10,7 @@ import { rotatedBounds } from "./rotation"
 
 import type { ArrowAnchor, ArrowNode, LineStyle, SquigNode } from "../types"
 import { normalizeLineStyle } from "../types"
+import { textWidth } from "../sketch/kit"
 import { mirrorPoint } from "./transform"
 
 export type LinePoint = [number, number]
@@ -40,6 +41,17 @@ export type LocalArrowRoute =
 
 const EPS = 1e-6
 const OUTSIDE_LEAD = 28
+
+/**
+ * A connector's word is set at one size so labels agree on every arrow, and
+ * the pad is measured from an em-ratio guess. Erring wide is deliberate: too
+ * wide only hides a little more line, too narrow reads as a broken render.
+ */
+export const ARROW_LABEL_SIZE = 11
+const ARROW_LABEL_LINE = ARROW_LABEL_SIZE * 1.35
+const ARROW_LABEL_PAD = 4
+const ARROW_LABEL_SLACK = 1.15
+const ARROW_LABEL_INSET = 8
 
 const midpoint = (a: LinePoint, b: LinePoint): LinePoint => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
 
@@ -194,6 +206,76 @@ export function localRouteEndTangent(route: LocalArrowRoute): LinePoint {
   return [1, 0]
 }
 
+function polylineLength(points: readonly LinePoint[]): number {
+  let total = 0
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1])
+  }
+  return total
+}
+
+/** Sampled, because a quadratic's exact arc length buys nothing a word needs. */
+function curveLength(start: LinePoint, control: LinePoint, end: LinePoint): number {
+  const steps = 16
+  let total = 0
+  let previous = start
+  for (let i = 1; i <= steps; i++) {
+    const point = quadraticPoint(start, control, end, i / steps)
+    total += Math.hypot(point[0] - previous[0], point[1] - previous[1])
+    previous = point
+  }
+  return total
+}
+
+function routeLength(route: LocalArrowRoute): number {
+  return route.kind === "curve"
+    ? curveLength(route.start, route.control, route.end)
+    : polylineLength(route.points)
+}
+
+/**
+ * The point halfway along the drawn route, in local node space.
+ *
+ * Half the drawn length rather than the middle vertex: a symmetric dogleg puts
+ * its centre on the middle run, while a straight line with a bend near one end
+ * would otherwise carry its label near that bend.
+ */
+export function localRouteMidpoint(route: LocalArrowRoute): LinePoint {
+  if (route.kind === "curve") return quadraticPoint(route.start, route.control, route.end, 0.5)
+  const total = polylineLength(route.points)
+  let walked = 0
+  for (let i = 1; i < route.points.length; i++) {
+    const a = route.points[i - 1]
+    const b = route.points[i]
+    const run = Math.hypot(b[0] - a[0], b[1] - a[1])
+    if (run > EPS && walked + run >= total / 2) {
+      const t = (total / 2 - walked) / run
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+    }
+    walked += run
+  }
+  return route.points[route.points.length - 1]
+}
+
+/**
+ * The paper pad behind a connector's word, in local node space, or null when
+ * there is no word or the run is too short to carry one.
+ *
+ * A word hanging off a stub is worse than no word, so the pad's width is also
+ * what decides whether there is room at all.
+ */
+export function localArrowLabelBox(
+  route: LocalArrowRoute,
+  label: string | undefined
+): { x: number; y: number; w: number; h: number } | null {
+  if (!label) return null
+  const w = textWidth(label, ARROW_LABEL_SIZE) * ARROW_LABEL_SLACK + ARROW_LABEL_INSET
+  if (routeLength(route) < w) return null
+  const h = ARROW_LABEL_LINE + ARROW_LABEL_PAD
+  const [mx, my] = localRouteMidpoint(route)
+  return { x: mx - w / 2, y: my - h / 2, w, h }
+}
+
 function localToWorld(n: ArrowNode, p: LinePoint): LinePoint {
   return mirrorPoint(n, n.x + p[0], n.y + p[1])
 }
@@ -251,6 +333,18 @@ export function arrowRouteBounds(n: ArrowNode): RouteBounds {
     local = [...ts].map((t) => quadraticPoint(route.start, route.control, route.end, t))
   }
   const points = local.map((p) => localToWorld(n, p))
+  // a long word on a short connector reaches wider than the route itself, so
+  // the pad belongs in the box an export is cropped to
+  const pad = localArrowLabelBox(route, n.label)
+  if (pad) {
+    const corners: LinePoint[] = [
+      [pad.x, pad.y],
+      [pad.x + pad.w, pad.y],
+      [pad.x, pad.y + pad.h],
+      [pad.x + pad.w, pad.y + pad.h],
+    ]
+    for (const corner of corners) points.push(localToWorld(n, corner))
+  }
   let minX = Infinity
   let minY = Infinity
   let maxX = -Infinity

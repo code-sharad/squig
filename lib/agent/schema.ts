@@ -47,6 +47,7 @@ export const nodeFields = z
       ])
       .optional(),
     lineStyle: z.enum(["straight", "elbow", "curved"]).optional(),
+    label: z.string().max(120).optional(),
     elbowAxis: z.enum(["x", "y"]).optional(),
     elbowOffset: point.optional(),
     curveBend: point.optional(),
@@ -114,6 +115,7 @@ export const operation = z.discriminatedUnion("op", [
                 "anchors",
                 "snap",
                 "lineStyle",
+                "label",
                 "elbowAxis",
                 "elbowOffset",
                 "curveBend",
