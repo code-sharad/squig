@@ -29,6 +29,7 @@ import { normalizeRotation } from "./canvas/rotation"
 import { spaceNodes, tidyNodes, type SpacingOptions } from "./canvas/spacing"
 import { arrangeSelection } from "./canvas/arrange"
 import { breakApart } from "./library/break-apart"
+import { findBlueprint, placeBlueprint } from "./library/system-templates"
 import {
   applyLook,
   DEFAULT_LOOK,
@@ -286,6 +287,8 @@ interface SquigState {
   /** drop a library item at the middle of what the user is looking at,
       optionally overriding some of its default props (⌘K inserting an icon) */
   insertComponent: (kind: string, props?: Record<string, unknown>) => void
+  /** put a whole architecture on the sheet, centred and selected, as one step */
+  insertBlueprint: (id: string) => void
   alignSelected: (edge: "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom") => void
   newFile: () => void
   /** swap the canvas to another file in the drawer, saving this one first */
@@ -1748,6 +1751,21 @@ export const useSquig = create<SquigState>((set, get) => ({
       ...node,
       x: Math.round(cx - node.w / 2),
       y: Math.round(cy - node.h / 2),
+    })
+  },
+
+  insertBlueprint: (id) => {
+    const bp = findBlueprint(id)
+    if (!bp) return
+    const v = get().viewport
+    const [cx, cy] = screenToWorld(v, window.innerWidth / 2, window.innerHeight / 2)
+    const placed = placeBlueprint(bp, { x: cx, y: cy })
+    // addNodes on the cheap, then the names: one edit is one undo step, and its
+    // checkpoint is taken before either half runs, so ⌘Z takes the region with
+    // the boxes it was drawn around
+    get().edit(() => {
+      get().addNodes(placed.nodes, { checkpoint: false })
+      set((s) => ({ groups: { ...s.groups, ...placed.groups } }))
     })
   },
 

@@ -14,6 +14,7 @@
 
 import { nanoid } from "nanoid"
 import type {
+  ArrowAnchors,
   ArrowNode,
   Box,
   ComponentNode,
@@ -31,7 +32,7 @@ import type {
   TextAlign,
   TextNode,
 } from "./types"
-import { normalizeFill, normalizeGroupStyle } from "./types"
+import { normalizeArrowAnchors, normalizeFill, normalizeGroupStyle, normalizeLabel } from "./types"
 import { validNode } from "./clipboard-payload"
 import { bindPair, settleBinds } from "./canvas/arrow-binding"
 import { boundaryList } from "./canvas/boundary"
@@ -369,6 +370,10 @@ export interface ArrowOpts {
   stroke?: StrokeWeight
   ink?: InkTone
   dashed?: boolean
+  /** a word at the route's midpoint, on the pad that breaks the line */
+  label?: string
+  /** which side of each box an end leaves from; the facing side when absent */
+  anchors?: ArrowAnchors
   id?: string
   seed?: number
 }
@@ -393,6 +398,11 @@ export function arrowNode(opts: ArrowOpts, nodes: Record<string, SquigNode>): Ar
   const b = end(opts.to, "to")
   const x = Math.min(a[0], b[0])
   const y = Math.min(a[1], b[1])
+  const bind = bindPair(fromId, toId)
+  const label = normalizeLabel(opts.label)
+  // an anchor on a free end names a side of nothing, so it goes the same way
+  // the loaded-document case drops it
+  const anchors = normalizeArrowAnchors(opts.anchors, bind)
   return {
     id: opts.id ?? newId(),
     seed: opts.seed ?? newSeed(),
@@ -406,7 +416,9 @@ export function arrowNode(opts: ArrowOpts, nodes: Record<string, SquigNode>): Ar
       [a[0] - x, a[1] - y],
       [b[0] - x, b[1] - y],
     ],
-    bind: bindPair(fromId, toId),
+    bind,
+    ...(label ? { label } : {}),
+    ...(anchors ? { anchors } : {}),
     ...(opts.lineStyle && opts.lineStyle !== "straight" ? { lineStyle: opts.lineStyle } : {}),
     ...(opts.stroke && opts.stroke !== "regular" ? { stroke: opts.stroke } : {}),
     ...(opts.ink && opts.ink !== "ink" ? { ink: opts.ink } : {}),

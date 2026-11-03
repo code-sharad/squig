@@ -38,7 +38,7 @@ const USAGE = `squig — draw wireframes from a terminal
   add <file> <kind> --x N --y N [--w N] [--h N] [--props '{"label":"Go"}'] [--id ID]
   text <file> "<words>" --x N --y N [--size N] [--w N] [--align left|center|right] [--bold] [--ink ink|muted|faint]
   shape <file> rect|ellipse --x N --y N --w N --h N [--fill none|light|strong|paper] [--dashed]
-  arrow <file> --from <id|x,y> --to <id|x,y> [--no-head] [--style straight|elbow|curved]
+  arrow <file> --from <id|x,y> --to <id|x,y> [--no-head] [--style straight|elbow|curved] [--label "HTTPS"]
   set <file> <id> --patch '{"w":320}'         change one node
   rm|group|front|back <file> <id...>          remove, group, reorder
   render <file> [--out picture.svg] [--transparent]
@@ -48,7 +48,7 @@ const str = { type: "string" } as const
 const bool = { type: "boolean" } as const
 const OPTIONS = {
   name: str, id: str, x: str, y: str, w: str, h: str, props: str, size: str, align: str,
-  ink: str, fill: str, from: str, to: str, style: str, patch: str, out: str,
+  ink: str, fill: str, from: str, to: str, style: str, label: str, patch: str, out: str,
   port: str,
   force: bool, bold: bool, dashed: bool, "no-head": bool, transparent: bool,
 } as const
@@ -193,6 +193,7 @@ function built(command: string, args: string[], doc: SquigDocument): SquigNode {
       to: arrowEnd(need(flag.to, "--to"), "to"),
       head: !flag["no-head"],
       lineStyle: one(flag.style, STYLES, "style"),
+      label: flag.label,
       id: flag.id,
     },
     doc.nodes
