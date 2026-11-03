@@ -25,6 +25,12 @@ keyboard nudge, undo/redo. Everything you'd expect.
 selects, switches, tables, dialogs, tabs, nav, sidebars — plus blocks (heroes,
 pricing, FAQ, AI chat, checkout, kanban) and whole screen templates.
 
+**Or a system diagram.** The same shelf holds servers, databases, caches,
+queues, workers and boundaries, so the napkin works for architecture too. Name
+a group and it draws itself as a dashed region around its members. Put a word
+on a connector and the line breaks around it. Four blueprints (short link,
+chat, rate limiter, upload) land a whole architecture as real, connected boxes.
+
 **Everything is a component with variants.** Drop a button, and the inspector
 flips it: icon left, icon right, size, filled or outline. It stays a component
 while you do that — you're switching variants, not editing shapes.

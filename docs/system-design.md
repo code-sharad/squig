@@ -1,172 +1,134 @@
 # System design on squig
 
-Boxes, arrows and boundaries are a system diagram already. What squig lacks is
-not a canvas, it is a name for a set of boxes, a word on an arrow, and a shelf
-of things that are not UI. This file is the decision record for closing that
-gap. It is a plan, not documentation of shipped behaviour, so it moves as the
-work lands.
+Boxes, arrows and boundaries are a system diagram already. What squig lacked
+was a name for a set of boxes, a word on a connector, and a shelf of things that
+are not UI. This file records what was decided and what shipped, so the next
+person changing any of it knows why it looks the way it does.
 
-## What we are building
+## What shipped
 
-Four units, each ending on the gate in `AGENTS.md` (`pnpm typecheck`,
-`pnpm test`, `pnpm lint`) and a look at `/kitchen-sink`.
+Four units, each landed on the gate in `AGENTS.md` (`pnpm typecheck`,
+`pnpm test`, `pnpm lint`) and looked at as a picture. The order mattered: every
+unit was checked against the real renderer before the next one started.
 
-1. Arrow labels.
-2. Group boundaries.
-3. The Systems shelf.
+1. A word on a connector.
+2. A boundary for a group that has a name.
+3. The systems shelf.
 4. Blueprints.
 
-A fifth unit, double-clicking a connector to type its label on the canvas,
-comes after those four are green.
+Still open: double-clicking a connector to type its label on the canvas. Today
+the label is an inspector field.
 
-## Unit 1, a word on an arrow
+## A word on a connector
 
-`ArrowNode` gains `label?: string`. It is a new field, so it has to pass the
-four doors that already exist.
+`ArrowNode.label?: string`, one line, capped at 120 characters by
+`normalizeLabel` in `lib/types.ts`. It passes the four doors a new field always
+has to pass.
 
 | door | what it does with `label` |
 |---|---|
-| `lib/types.ts` | declares it, absent means unlabelled |
-| `lib/clipboard-payload.ts` (`validNode`) | keeps a non-empty string under 120 characters, drops the rest |
-| `lib/agent/schema.ts` | adds it to the zod allowlist, so an agent can write it |
-| `components/canvas/sketch.tsx` (`shapeKey`) | includes it, or the line redraws without its label |
+| `lib/types.ts` | declares it, and normalizes whitespace so a pasted newline becomes a space |
+| `lib/clipboard-payload.ts` (`validNode`) | the same door a `bind` comes through |
+| `lib/agent/schema.ts` | the zod allowlist, plus the `unset` list so an agent can clear one |
+| `components/canvas/sketch.tsx` (`shapeKey`) | includes it, or the line redraws without its word |
 
-`lib/sketch/node-prims.ts` draws it: a text prim at the route midpoint, on top
-of a paper-filled rect that is two or three units wider than the words. The pad
-is the point. Without it the stroke runs through the letters, which the
-prototype sheet in this repo made obvious and ugly. The pad's own outline is
-never drawn.
+The label draws at the route's midpoint on a paper pad that breaks the stroke.
+`lib/canvas/line-routing.ts` owns the geometry, `localRouteMidpoint` and
+`localArrowLabelBox`, because the renderer and the export bounds have to agree
+on where the pad is. The midpoint is half the drawn length for a polyline and
+t=0.5 for a curve, so an elbow carries its word on a run rather than at the
+corner. A label wider than its run hides itself: a word hanging off a stub is
+worse than no word.
 
-The midpoint is a new `localRouteMidpoint` beside `localRouteEndTangent` in
-`lib/canvas/line-routing.ts`. A straight line takes its halfway point. A
-polyline takes the midpoint of the middle run, so an elbow carries its label on
-the horizontal or vertical run rather than at the corner. A curve takes t=0.5.
-The label hides itself when the run is shorter than the words, because a label
-hanging off a stub is worse than no label.
+The pad is one identity for two subjects. `lib/sketch/labels.ts` is the shared
+pad, used by a connector's label and by a boundary name placed on an edge.
 
-`arrowRouteBounds`, used to size exports, grows to include the label, or a long
-word on a short arrow is cropped out of the PNG.
+`ArrowOpts.label` lets the builders and the CLI set one at creation.
 
-The inspector gets one text field. Nothing else in the UI changes.
+## A boundary is a group with a name
 
-## Unit 2, a boundary is a group with a name
+`SquigDoc.groups` maps a group id to `{ label, at? }`. A record exists only when
+there is a name, so grouping for tidy selection stays invisible.
 
-A group already carries membership, moving together, nesting, duplicate, paste
-and undo. What it does not carry is a name, and nothing renders it.
+| field | meaning |
+|---|---|
+| `label` | the boundary's name, one line, 80 characters |
+| `at` | `inside-left` (absent), `inside-center`, `inside-right`, `edge-left`, `edge-center`, `edge-right` |
 
-So `SquigDoc` gains one optional field.
+`lib/canvas/boundary.ts` holds the geometry, which is never stored.
 
-```json
-{
-  "groups": {
-    "Wq3dRt": { "label": "aws us-east-1", "labelAt": "inside-left" }
-  }
-}
-```
+- Members are every node carrying the group id at any depth, so an outer
+  boundary wraps the groups inside it.
+- The box is the members' union, measured through `nodeVisualBounds` so a bent
+  connector's bulge stays inside, plus 24 units of padding.
+- Boundaries print outermost first, behind every node.
+- A record with no members draws nothing, and `pruneGroupStyles` in
+  `lib/canvas/groups.ts` drops it wherever `pruneDegenerateGroups` already
+  prunes. A name cannot outlive its group.
 
-`labelAt` is one enum, `inside-left` (the default), `inside-center`,
-`inside-right`, `on-left`, `on-center`, `on-right`. There is no boolean pair
-here because two booleans that have to agree is the shape this codebase spends
-its comments avoiding. `on-*` placements put the name on the edge and break the
-dashed line with the same paper pad the arrow label uses. One helper for the
-pad serves both, in `lib/sketch/labels.ts`.
+The canvas and the exporter both call `boundaryList` and `boundaryPrims`, which
+is what keeps one dashed region from being two slightly different drawings.
+`drawNodes` takes the names through `opts.groups`, `renderSvg` takes a trailing
+`groups`, and `docBounds` includes the boundary boxes so an export is not
+cropped.
 
-Rules that keep this honest.
+The name travels with the document: `parseDoc` and `serializeDoc`, `StoredDoc`,
+the store's state and `DocSnapshot` (so a rename undoes), the agent's document
+schema, the companion's snapshot and merge, `window.squig.doc()`, and undo.
 
-- **The box is a consequence.** Boundary geometry is the union of its members
-  plus 24 units of padding, computed at render. Nothing about it is stored, the
-  same deal a bound arrow already has with its targets.
-- **It prints under its members.** Boundaries draw first, sorted by depth from
-  `groupIds`, so a region can contain a zone that contains a service.
-- **It prunes with the group.** `pruneDegenerateGroups` already drops a group
-  that falls below two children. The `groups` record is filtered to the ids
-  still referenced after that runs, so a boundary never outlives its members.
-- **It is the only spelling.** A group with no record draws nothing, exactly as
-  today, so grouping for tidy selection stays invisible until you name it.
+Two traps worth remembering.
 
-The render lives in one pure function that returns prims, `lib/canvas/boundary.ts`,
-called from the canvas pass and from the exporter. Two renderers is the real
-risk in this unit, so the shared function is what keeps them from drifting, and
-`scripts/test-svg.ts` asserts an exported document contains the boundary name.
+- **The ink is `tone`, not `stroke`.** `PrimOpts.stroke` is how hard the pen
+  presses; the line's colour comes from `tone`. `stroke: "faint"` gave a
+  boundary the full ink at a hairline weight, which the PNG sample caught and
+  no test would have. The boundary is `tone: "faint"`.
+- **The select's value is an id.** A `SelectValue` with no children prints the
+  raw value, so the placement trigger said `inside-left` at a person until it
+  was given the option's label.
 
-The exporter needs the groups to draw them, and `renderSvg` takes a node list
-rather than a document. Rather than grow a fifth positional parameter, the
-export path gains a document-aware entry, `renderDoc(doc, surface)`, that
-unpacks order, nodes, look and groups. Callers that hold a whole document move
-to it. `renderSvg` keeps its signature for callers that hold only nodes.
+## The systems shelf
 
-The inspector shows a name field and the placement select when the selection is
-exactly one group.
-
-## Unit 3, the shelf
-
-Everything, twenty-two kinds, in three sections appended to the Components
-panel. No third category, no new panel, no new shortcut, because a category
-costs `PanelKind`, the rail, two keys, the palette section names and the
-kitchen sink, and buys a shelf of twenty-two items its own tab.
+Twenty-two kinds in `lib/library/defs-systems.ts`, in three panel sections.
+`category` stays `"components"`, which is what makes the panel, the palette,
+`squig components` and `/kitchen-sink` pick them up with no other change.
 
 | section | kinds |
 |---|---|
 | Systems | `server`, `database`, `cache`, `queue`, `topic`, `worker`, `load-balancer`, `gateway`, `cdn`, `object-store`, `client`, `external` |
-| Pipelines | `pipeline`, `cron`, `stream`, `warehouse`, `dashboard` |
-| Infra | `pod`, `container`, `node`, `ingress`, `secret` |
+| Pipelines | `pipeline`, `cron`, `stream`, `warehouse`, `metrics` |
+| Infra | `pod`, `container`, `machine`, `ingress`, `secret` |
 
-Every kind takes a `label` and a `note`. The note is plain text with no
-meaning: a box may say `postgres` or `2 replicas`, and nothing downstream
-reads it as a specification. Two controls, and the note disappears when it is
-empty.
+One family, not twenty-two drawings: the same box, the same glyph well at the
+left, the same two lines of type, and a lone label centred on the box's optical
+middle. A note appears under the name when someone types one, and it is plain
+text with no meaning downstream. `external` is the only dashed box.
 
-Signatures are drawn prims in the house hand. A cylinder is an ellipse, a body,
-and a second ellipse, which is the same vocabulary the library already uses for
-tables and calendars. No Phosphor glyph goes inside a system box, because a
-crisp imported glyph next to a wobbling outline reads as a rendering fault.
-`external` is the one dashed box, for anything third party.
+The glyphs are prims. A crisp Phosphor path inside a wobbling outline reads as a
+rendering fault.
 
-`node` is a poor name for a compute host, since it collides with the document's
-own word for a layer. It ships as `machine` with `node` as a keyword.
+Two slugs were forced by other names. `machine` is not `node`, because "node"
+already means a layer on this canvas, and `node`, `host`, `vm`, `cpu` are
+keywords so the search finds it. The dashboard box is `metrics`, because the
+Screens template has held `dashboard` since before the shelf existed and a file
+naming that kind has to keep opening as the screen it was. The word still finds
+the box, by name and keyword.
 
-## Unit 4, blueprints
+## Blueprints
 
-A blueprint is a document fragment, not a component. A component that renders a
-whole architecture becomes one node, and Break Apart then hands you loose lines
-with the bindings gone, which is worse than useless on a connector.
+`lib/library/system-templates.ts`: Short link, Chat, Rate limiter, Upload. Each
+builds with the builders in `lib/doc.ts`, so its connectors are bound to the
+boxes they were built against and its region is a named group. A component that
+drew a whole architecture would detach into loose lines, which is worse than
+useless on a connector.
 
-So `lib/library/system-templates.ts` holds a table. Each entry has an `id`, a
-`title`, a `description`, and a `build(at)` that returns real nodes through the
-builders in `lib/doc.ts`, so `arrowNode` binds to the boxes it just made. One
-store action places the result through the existing `addNodes`, and each
-blueprint appears in `⌘K` as an action.
+`placeBlueprint` centres the drawing on a point, mints fresh ids for every node
+and group, and cascades down and right while the spot is occupied, so asking
+for a second architecture holds it beside the first instead of on top of it.
+`insertBlueprint` in the store is one `edit()`, so one keystroke undoes the
+whole thing, boundary included. The palette lists the four under Blueprints.
 
-| blueprint | what it teaches |
-|---|---|
-| Short link | client, gateway, service, cache, database |
-| Chat | a topic fanning out to sockets |
-| Rate limiter | a counter store in front of a service |
-| Upload | service, object store, queue, worker, database |
-
-## Not building
+## Not built, on purpose
 
 Typed spec fields, capacity validation, auto-layout, sequence diagrams, and
 containers with real nesting. The first two push toward the precision this tool
-exists to avoid. The third is a feature nobody asked for on a napkin. The last
-would be a second hierarchy beside `groupIds`.
-
-## Decided by the render, not by argument
-
-Two throwaway sheets were drawn with today's primitives and exported through
-`pnpm squig render`.
-
-- Labels struck through by their own line. Fixed by the paper pad above.
-- The boundary reads on a napkin at a faint dashed outline with its name inside
-  the top left. On the line it needed a pad, and the pad's outline turned the
-  name into a chip.
-- Straight connectors crossing each other is a property of straight connectors,
-  not of labels. Blueprints should use `lineStyle: "elbow"` where two
-  connectors share a source.
-
-## Open decisions
-
-- The systems shelf has no theme or sheet of its own. It prints on whatever the
-  document already is, which is the point of one ink.
-- Placement of a blueprint is the centre of the viewport, selected after
-  insertion. Dropping one at the pointer may be worth a follow-up.
+exists to avoid. The last would be a second hierarchy beside `groupIds`.
