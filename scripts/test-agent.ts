@@ -299,6 +299,29 @@ check(
   ).document.nodes.b.groupIds === undefined,
 )
 
+// -- an agent edit does not erase a boundary name ---------------------------
+
+const groupId = grouped.nodes.a.groupIds?.[0] ?? ""
+const named: CanvasDocument = { ...grouped, groups: { [groupId]: { label: "aws us-east-1", at: "edge-center" } } }
+check(
+  "an agent node update leaves boundary names untouched",
+  same(
+    applyOperations(named, operation.array().parse([{ op: "update", patches: [{ id: "a", patch: { x: 12 } }] }])).document.groups,
+    named.groups,
+  ),
+)
+check(
+  "…and a name goes when its group's last member does",
+  applyOperations(named, operation.array().parse([{ op: "delete", ids: ["a", "b"] }])).document.groups === undefined,
+)
+check(
+  "a whole-document replacement can carry a name",
+  same(
+    validateDocument({ ...grouped, groups: { [groupId]: { label: "region" } } }).groups,
+    { [groupId]: { label: "region" } },
+  ),
+)
+
 // -- arranging --------------------------------------------------------------
 
 const arranged = applyOperations(
@@ -448,7 +471,7 @@ check(
 // -- merging a shared canvas ------------------------------------------------
 // Concurrent human and agent changes both have to survive the round trip.
 
-const { mergeCanvas, canvasEqual } = await import("../lib/agent/merge")
+const { mergeCanvas, canvasEqual, canvasSnapshot, editableCanvas } = await import("../lib/agent/merge")
 check("key order doesn't count", canvasEqual({ a: 1, b: 2 }, { b: 2, a: 1 }))
 check(
   "an undefined field reads as absent, nested",
@@ -527,6 +550,46 @@ check(
     ).conflicts,
     ["order"],
   ),
+)
+
+// -- a boundary name reaches the companion and comes back -------------------
+// The bridge ships its editable canvas to the local file on every tick. A field
+// left off that list is a document edit that never arrives: the companion's copy
+// says the name was never there, and reopening the file loses it.
+
+const edgeNodes = {
+  a: { id: "a", seed: 1, type: "shape", shape: "rect", fill: "none", x: 0, y: 0, w: 40, h: 30, groupIds: ["region"] },
+  b: { id: "b", seed: 1, type: "shape", shape: "rect", fill: "none", x: 80, y: 0, w: 40, h: 30, groupIds: ["region"] },
+} as CanvasDocument["nodes"]
+const browserCanvas = canvasSnapshot({
+  fileName: "short link",
+  nodes: edgeNodes,
+  order: ["a", "b"],
+  groups: { region: { label: "aws us-east-1", at: "edge-center" } },
+  theme: "internet-blue",
+  font: "hand",
+  paper: "white",
+  grid: true,
+})
+check(
+  "a browser snapshot carries the boundary name",
+  same(browserCanvas.groups, { region: { label: "aws us-east-1", at: "edge-center" } }),
+)
+const storedCanvas = validateDocument({ ...browserCanvas, variations: [] })
+const stayedNamed = editableCanvas(storedCanvas)
+check("…the companion's copy keeps it", same(stayedNamed.groups, browserCanvas.groups))
+check(
+  "a name typed between ticks merges and survives the file",
+  (() => {
+    const renamed = { ...browserCanvas, groups: { region: { label: "eu-west-1" } } }
+    const merged = mergeCanvas(browserCanvas, renamed, stayedNamed)
+    const reply = editableCanvas(validateDocument({ ...merged.value, variations: [] }))
+    return merged.conflicts.length === 0 && same(reply.groups, renamed.groups)
+  })(),
+)
+check(
+  "a reply with no names reads as the empty record, not a deletion",
+  same(editableCanvas({ ...stayedNamed, groups: undefined }).groups, {}),
 )
 
 // -- an edit response ships only the nodes its batch touched ----------------

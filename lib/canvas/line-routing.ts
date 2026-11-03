@@ -10,7 +10,7 @@ import { rotatedBounds } from "./rotation"
 
 import type { ArrowAnchor, ArrowNode, LineStyle, SquigNode } from "../types"
 import { normalizeLineStyle } from "../types"
-import { textWidth } from "../sketch/kit"
+import { labelPadBox } from "../sketch/labels"
 import { mirrorPoint } from "./transform"
 
 export type LinePoint = [number, number]
@@ -48,10 +48,6 @@ const OUTSIDE_LEAD = 28
  * wide only hides a little more line, too narrow reads as a broken render.
  */
 export const ARROW_LABEL_SIZE = 11
-const ARROW_LABEL_LINE = ARROW_LABEL_SIZE * 1.35
-const ARROW_LABEL_PAD = 4
-const ARROW_LABEL_SLACK = 1.15
-const ARROW_LABEL_INSET = 8
 
 const midpoint = (a: LinePoint, b: LinePoint): LinePoint => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
 
@@ -269,11 +265,14 @@ export function localArrowLabelBox(
   label: string | undefined
 ): { x: number; y: number; w: number; h: number } | null {
   if (!label) return null
-  const w = textWidth(label, ARROW_LABEL_SIZE) * ARROW_LABEL_SLACK + ARROW_LABEL_INSET
-  if (routeLength(route) < w) return null
-  const h = ARROW_LABEL_LINE + ARROW_LABEL_PAD
   const [mx, my] = localRouteMidpoint(route)
-  return { x: mx - w / 2, y: my - h / 2, w, h }
+  // the pad is the same one a boundary's edge label sits on, so a line and a
+  // region break for their words in the same way
+  const pad = labelPadBox(label, ARROW_LABEL_SIZE, { cx: mx, cy: my })
+  // a word longer than the line it belongs to is not a label, it's a caption
+  // the route has no room for
+  if (routeLength(route) < pad.w) return null
+  return pad
 }
 
 function localToWorld(n: ArrowNode, p: LinePoint): LinePoint {

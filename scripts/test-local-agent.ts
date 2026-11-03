@@ -145,6 +145,25 @@ try {
   const backups = await readdir(bytesBounded.historyPath)
   const bytes = (await Promise.all(backups.map(async (name) => (await stat(join(bytesBounded.historyPath, name))).size))).reduce((sum, size) => sum + size, 0)
   check("history also respects a sixteen MiB byte budget", bytes <= LOCAL_HISTORY_BYTES && backups.length < 31)
+
+  // -- a hand-edited name is read at the shape the format can hold -----------
+  const grouped = addNodes(emptyDoc("Hand edited names"), [
+    shapeNode("rect", { id: "a", seed: 1, x: 0, y: 0, w: 40, h: 30 }),
+    shapeNode("rect", { id: "b", seed: 1, x: 80, y: 0, w: 40, h: 30 }),
+  ])
+  for (const id of ["a", "b"]) grouped.nodes[id].groupIds = ["region"]
+  const handEdited = (groups: unknown) => JSON.stringify({ ...JSON.parse(serializeDoc(grouped)), groups }, null, 2)
+
+  await writeFile(join(folder, "shaped-groups.squig.json"), handEdited({ region: { label: "x".repeat(200), at: "beside" } }))
+  const shaped = (await (await open("shaped-groups.squig.json")).read()).document.groups?.region
+  check(
+    "an over-long label and an unknown placement decode to the format's shape",
+    shaped?.label === "x".repeat(80) && shaped?.at === undefined,
+  )
+
+  await writeFile(join(folder, "dropped-groups.squig.json"), handEdited({ region: null }))
+  const dropped = (await (await open("dropped-groups.squig.json")).read()).document
+  check("a record parseDoc discards does not come back as the raw field", dropped.groups === undefined)
 } finally {
   process.chdir(oldCwd)
   for (const store of opened) await store.close()

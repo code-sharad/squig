@@ -7,7 +7,7 @@
 // duplicate, paste and ungroup one definition of the hierarchy.
 // ---------------------------------------------------------------------------
 
-import type { SquigNode } from "../types"
+import type { GroupStyles, SquigNode } from "../types"
 
 export interface GroupPick {
   ids: string[]
@@ -331,4 +331,22 @@ export function pruneDegenerateGroups(nodes: Record<string, SquigNode>): Record<
     out[id] = { ...n, groupIds: groupIds.length ? groupIds : undefined } as SquigNode
   }
   return out
+}
+
+/**
+ * Keep only the names whose group still has members.
+ *
+ * Call this wherever nodes are pruned. Deleting the last member of a named
+ * group leaves its record behind otherwise, and a record with no members would
+ * draw a boundary around nothing, or worse, come back to life around whatever
+ * happened to use that group id next. A record survives in the file only while
+ * its group does.
+ */
+export function pruneGroupStyles(styles: GroupStyles | undefined, nodes: Record<string, SquigNode>): GroupStyles | undefined {
+  if (!styles) return undefined
+  const live = new Set<string>()
+  for (const n of Object.values(nodes)) for (const groupId of pathOf(n)) live.add(groupId)
+  const kept: GroupStyles = {}
+  for (const [groupId, style] of Object.entries(styles)) if (live.has(groupId)) kept[groupId] = style
+  return Object.keys(kept).length ? kept : undefined
 }

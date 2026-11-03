@@ -241,6 +241,14 @@ export function normalizeBind(v: unknown): ArrowBind | undefined {
   return a || b ? [a, b] : undefined
 }
 
+/** One line of words, containing no run of whitespace, or undefined for none. */
+function oneLine(v: unknown, max: number): string | undefined {
+  if (typeof v !== "string") return undefined
+  const flat = v.replace(/\s+/g, " ").trim()
+  if (!flat) return undefined
+  return flat.slice(0, max).trimEnd()
+}
+
 /**
  * Words we're willing to print on a connector, or undefined for none.
  *
@@ -250,10 +258,55 @@ export function normalizeBind(v: unknown): ArrowBind | undefined {
  * the words are placed on whatever line happens to be there.
  */
 export function normalizeLabel(v: unknown): string | undefined {
-  if (typeof v !== "string") return undefined
-  const flat = v.replace(/\s+/g, " ").trim()
-  if (!flat) return undefined
-  return flat.slice(0, 120).trimEnd()
+  return oneLine(v, 120)
+}
+
+/**
+ * Where a named group's label sits: inside its top-left corner as the default,
+ * or on the top edge breaking the dashed line with a paper pad.
+ */
+export type BoundaryLabelAt = "inside-left" | "inside-center" | "inside-right" | "edge-left" | "edge-center" | "edge-right"
+
+export const BOUNDARY_LABEL_AT = [
+  "inside-left",
+  "inside-center",
+  "inside-right",
+  "edge-left",
+  "edge-center",
+  "edge-right",
+] as const
+
+/**
+ * A group's name, and where it prints. A record exists only when there is a
+ * name, so grouping for tidy selection still draws nothing at all.
+ */
+export interface GroupStyle {
+  label: string
+  /** absent means inside-left, the only spelling of the default */
+  at?: BoundaryLabelAt
+}
+
+export type GroupStyles = Record<string, GroupStyle>
+
+/** A stranger's file can spell a placement however it likes; we cannot. */
+export function normalizeBoundaryLabelAt(v: unknown): BoundaryLabelAt | undefined {
+  return typeof v === "string" && (BOUNDARY_LABEL_AT as readonly string[]).includes(v)
+    ? (v as BoundaryLabelAt)
+    : undefined
+}
+
+/**
+ * A boundary's name as a document may hold it, or undefined for "not named".
+ * The cap is about the label staying one short line inside the box it belongs
+ * to, not about storage: a boundary is a region, and its name is a sign on it.
+ */
+export function normalizeGroupStyle(v: unknown): GroupStyle | undefined {
+  if (!v || typeof v !== "object") return undefined
+  const raw = v as GroupStyle
+  const label = oneLine(raw.label, 80)
+  if (!label) return undefined
+  const at = normalizeBoundaryLabelAt(raw.at)
+  return { label, ...(at ? { at } : {}) }
 }
 
 /** Anchors from an imported document, with anchors on free ends discarded. */
@@ -373,6 +426,8 @@ export interface SquigDoc {
   fileName: string
   nodes: Record<string, SquigNode>
   order: string[]
+  /** named groups, keyed by the same group id `groupIds` carries */
+  groups?: GroupStyles
   variations?: SquigVariation[]
   comments?: SquigComment[]
 }
