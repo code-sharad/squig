@@ -98,10 +98,21 @@ Twenty-two kinds in `lib/library/defs-systems.ts`, in three panel sections.
 | Pipelines | `pipeline`, `cron`, `stream`, `warehouse`, `metrics` |
 | Infra | `pod`, `container`, `machine`, `ingress`, `secret` |
 
-One family, not twenty-two drawings: the same box, the same glyph well at the
-left, the same two lines of type, and a lone label centred on the box's optical
-middle. A note appears under the name when someone types one, and it is plain
-text with no meaning downstream. `external` is the only dashed box.
+One family, not twenty-two drawings: no box and no frame, a symbol 52 units
+square and centred, its name 14 bold underneath and the note 11 muted under
+that. Every kind is 120 by 96, so the family lines up on a grid. The symbol's
+band runs from 4 to 56, which straddles the item's half height on purpose: a
+horizontal connector binds at mid height, and an arrow has to land level with
+the symbol rather than with the name.
+
+A note appears under the name when someone types one, and it is plain text with
+no meaning downstream. `external` has no dashed frame either; its glyph's own
+wall is dashed, so the one third-party item says "outside" without a second
+outline around the words.
+
+The glyphs are authored in a 22 unit square and scaled to 52 by `scaleGlyph`,
+which leaves every `strokeWidth` alone. A pen is not part of a drawing's size:
+scaled with the marks, the hairline tuned at 22 would print as a 3.5 unit slab.
 
 The glyphs are prims. A crisp Phosphor path inside a wobbling outline reads as a
 rendering fault.

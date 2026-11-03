@@ -32,7 +32,9 @@ export interface Blueprint {
 // -- the grid ---------------------------------------------------------------
 // One column and one row pitch for all four, because the numbers are what make
 // a label fit: a connector has to be longer than the pad its word sits on, or
-// the label hides itself (see localArrowLabelBox). The shelf's box is 168×72.
+// the label hides itself (see localArrowLabelBox). The shelf's item is 120×96,
+// so a row leaves a 72 unit run between boxes and the longest word here,
+// "enqueue", needs 49 of it.
 
 const COL = 240
 const ROW = 168
