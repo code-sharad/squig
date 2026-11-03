@@ -38,6 +38,11 @@ while you do that — you're switching variants, not editing shapes.
 **Break apart when you need to.** If no variant covers what you want, break the
 component and its pieces become editable primitives. One-way, on purpose.
 
+**Light, dark, or whatever the machine says.** Ink and paper trade places at
+night, per palette, so a red sketch at 2am is a red sketch on a dark sheet
+rather than a white blast. The setting is the room, not the drawing: it is
+remembered for the app, and an export saves whichever one you are looking at.
+
 **⌘K searches everything.** Tools, actions, and every component and block, in
 one sheet. Enter drops it in the middle of your view.
 

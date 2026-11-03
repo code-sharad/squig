@@ -92,6 +92,12 @@ for (const name of THEME_NAMES) {
   const p = night(name)
   check(`${name}: night ink on the night sheet is legible`, contrast(p.ink, p.bg) >= 4.5, contrast(p.ink, p.bg).toFixed(2))
   check(`${name}: night ink on night paper is legible`, contrast(p.ink, p.paper) >= 4.5, contrast(p.ink, p.paper).toFixed(2))
+  // the secondary tone carries connector labels and boundary names, which are
+  // small and thin. Light on dark reads weaker than ink on paper at the same
+  // ratio, so the night ladder aims past the daylight numbers rather than at
+  // them: these two floors are what stops a night palette looking washed out.
+  check(`${name}: the secondary tone is readable`, contrast(p.muted, p.bg) >= 4.5, contrast(p.muted, p.bg).toFixed(2))
+  check(`${name}: a hairline still shows`, contrast(p.faint, p.bg) >= 2.2, contrast(p.faint, p.bg).toFixed(2))
 }
 
 // -- paper -------------------------------------------------------------------

@@ -247,8 +247,11 @@ export function paletteOf(name: string, night = false): Palette {
     bg: n.bg,
     paper,
     ink: n.ink,
-    muted: mix(n.bg, n.ink, 0.62),
-    faint: mix(n.bg, n.ink, 0.32),
+    // stronger than the day ladder on purpose: a thin line of light on a dark
+    // sheet reads weaker than the same line of ink on paper, so at 4.5:1 for
+    // the secondary tone the words are actually as legible as daylight's
+    muted: mix(n.bg, n.ink, 0.75),
+    faint: mix(n.bg, n.ink, 0.44),
     // the same rule as the day ladder: ink mixed into the paper it sits on
     shade: mix(paper, n.ink, 0.08),
     shadeStrong: mix(paper, n.ink, 0.2),
