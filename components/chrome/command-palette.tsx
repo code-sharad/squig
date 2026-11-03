@@ -70,6 +70,9 @@ import {
   ImageIcon,
   KeyboardIcon,
   BlueprintIcon,
+  SunIcon,
+  MoonIcon,
+  DesktopIcon,
   type Icon as PhosphorIcon,
 } from "@phosphor-icons/react"
 
@@ -222,6 +225,9 @@ function Palette() {
       { id: "zoom-sel", label: "Zoom to selection", hint: kbd("shift+2"), section: "View", icon: CornersInIcon, disabled: !hasSel, run: () => st().zoomToSelection() },
       { id: "zoom-reset", label: "Reset view", hint: kbd("mod+0"), section: "View", keywords: "origin home", icon: CornersOutIcon, run: () => st().setViewport({ x: 0, y: 0, zoom: 1 }) },
       { id: "hide-ui", label: "Hide the interface", hint: kbd("mod+\\"), section: "View", keywords: "clean present chrome", icon: EyeSlashIcon, run: () => st().setUiHidden(true) },
+      { id: "appearance-light", label: "Light appearance", section: "View", keywords: "light day room mode theme palette", icon: SunIcon, run: () => st().setAppearance("light") },
+      { id: "appearance-dark", label: "Dark appearance", section: "View", keywords: "dark night room mode theme palette invert", icon: MoonIcon, run: () => st().setAppearance("dark") },
+      { id: "appearance-system", label: "Match system appearance", section: "View", keywords: "system auto os room mode theme follow", icon: DesktopIcon, run: () => st().setAppearance("system") },
       { id: "keys", label: "Keyboard shortcuts", hint: kbd("shift+/"), section: "View", keywords: "hotkeys help cheat sheet", icon: KeyboardIcon, run: () => st().setShortcutsOpen(true) },
 
       { id: "new", label: "New file", section: "File", keywords: "blank clear reset", icon: FileIcon, run: () => st().newFile() },

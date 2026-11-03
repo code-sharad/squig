@@ -19,7 +19,7 @@ import type { SquigDoc, SquigNode } from "./types"
 import { documentMetadata } from "./doc"
 import { canWrite } from "./tabs"
 import { DEFAULT_BIG_NUDGE, normalizeBigNudge } from "./nudge"
-import { DEFAULT_LOOK, knownLook, type FontMode, type Look, type ThemeName } from "./theme"
+import { DEFAULT_APPEARANCE, DEFAULT_LOOK, knownAppearance, knownLook, type Appearance, type FontMode, type Look, type ThemeName } from "./theme"
 
 export interface FileMeta {
   id: string
@@ -43,6 +43,8 @@ export interface StoredDoc extends Pick<SquigDoc, "variations" | "comments" | "g
 export interface Prefs {
   /** the last look you set — what a new document starts from, nothing more */
   look: Look
+  /** light, dark, or follow the system: the room the app is in */
+  appearance: Appearance
   contextRow: boolean
   /** Shift's step for both move and resize nudges. */
   bigNudge: number
@@ -252,6 +254,7 @@ export function loadPrefs(): Prefs {
   return {
     // prefs used to keep the look's fields flat, so read them either way
     look: knownLook(p.look ?? p, DEFAULT_LOOK),
+    appearance: knownAppearance(p.appearance),
     contextRow: p.contextRow === true,
     bigNudge: normalizeBigNudge(p.bigNudge),
     activeId: typeof p.activeId === "string" ? p.activeId : null,
@@ -289,6 +292,7 @@ export function migrateLegacyDoc(newId: () => string): { doc: StoredDoc; prefs: 
   saveFile(doc, null)
   const prefs: Prefs = {
     look,
+    appearance: DEFAULT_APPEARANCE,
     contextRow: old.contextRow === true,
     bigNudge: DEFAULT_BIG_NUDGE,
     activeId: doc.id,

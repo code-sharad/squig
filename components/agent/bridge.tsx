@@ -6,7 +6,7 @@ import { agentRequest } from "@/lib/agent/client"
 import { canvasConnection } from "@/lib/agent/credentials"
 import { Popover } from "@base-ui/react/popover"
 import { CopyIcon, CheckIcon, PlugsConnectedIcon } from "@phosphor-icons/react"
-import { applyLook } from "@/lib/theme"
+import { applyLook, isDark } from "@/lib/theme"
 import { mergeCanvas, canvasEqual, canvasSnapshot, editableCanvas, type CanvasSnapshot } from "@/lib/agent/merge"
 import { listFiles, listRecentFiles, MAX_FILES, readFile, saveFile, type StoredDoc } from "@/lib/files"
 import "./agent.css"
@@ -125,7 +125,10 @@ export function AgentBridge({ hidden = false }: { hidden?: boolean }) {
         past: rebaseHistory(s.past),
         future: rebaseHistory(s.future),
       })
-      applyLook(doc.look)
+      // the file brings its ink and paper, not its room: a companion pushing
+      // a document must not flip a dark editor back to light
+      const room = useSquig.getState()
+      applyLook(doc.look, isDark(room.appearance, room.systemDark))
     }
     async function tick() {
       if (busy || stopped || !active) return

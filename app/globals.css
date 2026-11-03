@@ -116,6 +116,22 @@
   --sq-font: var(--font-sketch);
 }
 
+/* The same defaults at night, so first paint in a dark room is dark too. These
+   are paletteOf("internet-blue", true), and the store repaints them from the
+   document's own palette as soon as it has loaded one. */
+.dark {
+  --sq-bg: #101322;
+  --sq-paper: #171a2e;
+  --sq-ink: #8B9BFF;
+  --sq-muted: #5c67ab;
+  --sq-faint: #373f69;
+  --sq-shade: #20243f;
+  --sq-shade-strong: #2e3458;
+  --sq-grid: #212641;
+  --sq-select: #C77DFF;
+  --sq-measure: #e58a3f;
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -151,38 +167,44 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+/* Warm charcoal rather than the neutral grey the shadcn init ships. squig's
+   paper is warm, and a pure grey panel beside it reads as a different product.
+   Elevation comes from the lighter surface plus the border, so the shadows stay
+   soft: a shadow on a dark sheet is invisible, and a hard one is a bruise. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.75 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --background: oklch(0.175 0.004 85);
+  --foreground: oklch(0.945 0.004 85);
+  --card: oklch(0.205 0.004 85);
+  --card-foreground: oklch(0.945 0.004 85);
+  --popover: oklch(0.225 0.004 85);
+  --popover-foreground: oklch(0.955 0.004 85);
+  --primary: oklch(0.94 0.004 85);
+  --primary-foreground: oklch(0.19 0.004 85);
+  --secondary: oklch(0.255 0.004 85);
+  --secondary-foreground: oklch(0.94 0.004 85);
+  --muted: oklch(0.255 0.004 85);
+  --muted-foreground: oklch(0.72 0.005 85);
+  --accent: oklch(0.265 0.004 85);
+  --accent-foreground: oklch(0.96 0.004 85);
+  --destructive: oklch(0.68 0.19 25);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 13%);
+  --ring: oklch(0.58 0.004 85);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: oklch(0.2 0.004 85);
+  --sidebar-foreground: oklch(0.945 0.004 85);
+  --sidebar-primary: oklch(0.94 0.004 85);
+  --sidebar-primary-foreground: oklch(0.19 0.004 85);
+  --sidebar-accent: oklch(0.255 0.004 85);
+  --sidebar-accent-foreground: oklch(0.94 0.004 85);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.58 0.004 85);
+  --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -8px rgb(0 0 0 / 0.55);
+  --shadow-popup: 0 1px 2px rgb(0 0 0 / 0.45), 0 10px 32px -8px rgb(0 0 0 / 0.65);
 }
 
 @layer base {

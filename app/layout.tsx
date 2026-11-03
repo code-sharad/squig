@@ -63,6 +63,16 @@ export const metadata: Metadata = {
   },
 };
 
+/**
+ * The room, decided before the first paint.
+ *
+ * This has to run before any module does, so it cannot import isDark or the
+ * prefs reader; it repeats their rules once, here at the only boundary that
+ * needs to be earlier than both. Without it a dark room paints light and then
+ * flips a frame later, which is the most visible thing an app can do.
+ */
+const roomBeforePaint = `try{var p=JSON.parse(localStorage.getItem("squig:prefs:v1")||"{}");var a=p&&p.appearance;if(a==="dark"||(a!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -71,8 +81,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${patrickHand.variable} ${sourceSerif.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: roomBeforePaint }} />
+      </head>
       <body className="h-full overflow-hidden">{children}</body>
     </html>
   );

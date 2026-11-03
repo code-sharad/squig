@@ -75,8 +75,8 @@ export function AnchorZones({
  *
  * Round, where the eight box handles are square — that's the whole
  * distinction, and it's an honest one: those sit on the corners and edges of a
- * rectangle, these are points. Same size, same white-on-blue, so they still
- * read as "the bit you have hold of".
+ * rectangle, these are points. Same size, same paper disc inside the select
+ * ring, so they still read as "the bit you have hold of".
  *
  * An end that's attached to a box prints solid instead of hollow. It's the
  * only place the attachment shows once a drag is over, and it's the difference
@@ -121,7 +121,7 @@ function ArrowEnds({
               top: GRAB_OUT,
               width: HANDLE_DOT,
               height: HANDLE_DOT,
-              background: bind[i] ? "var(--sq-select)" : "#fff",
+              background: bind[i] ? "var(--sq-select)" : "var(--sq-paper)",
               border: "2px solid var(--sq-select)",
             }}
           />
@@ -175,7 +175,7 @@ function ConnectorRouteHandle({
           onPointerDown={show ? (e) => onStart(handle, e) : undefined}
         >
           <div
-            className="pointer-events-none absolute rotate-45 rounded-[2px] bg-white"
+            className="pointer-events-none absolute rotate-45 rounded-[2px] bg-[var(--sq-paper)]"
             style={{ left: GRAB_OUT, top: GRAB_OUT, width: dot, height: dot, border: "2px solid var(--sq-select)" }}
           />
         </div>
@@ -210,7 +210,7 @@ function ConnectorRouteHandle({
         }
       />
       <div
-        className="pointer-events-none absolute rotate-45 rounded-[2px] bg-white"
+        className="pointer-events-none absolute rotate-45 rounded-[2px] bg-[var(--sq-paper)]"
         style={{
           left: hx - left - dot / 2,
           top: hy - top - dot / 2,
@@ -377,7 +377,7 @@ export function SelectionOverlay({
                     onPointerDown={(e) => onStartResize(hd, e)}
                   >
                     <div
-                      className="pointer-events-none absolute rounded-[3px] bg-white"
+                      className="pointer-events-none absolute rounded-[3px] bg-[var(--sq-paper)]"
                       style={{
                         left: box.dotLeft,
                         top: box.dotTop,
@@ -392,7 +392,7 @@ export function SelectionOverlay({
         </div>
       )}
       {!marqueeing && interactive && (
-        <div className="pointer-events-none absolute rounded bg-[var(--sq-select)] px-1.5 py-0.5 text-micro text-white tabular-nums"
+        <div className="pointer-events-none absolute rounded bg-[var(--sq-select)] px-1.5 py-0.5 text-micro text-[var(--sq-paper)] tabular-nums"
           style={{ left: left + w / 2, top: Math.max(...visualBounds.map((box) => (box.y + box.h) * v.zoom + v.y)) + 16,
             transform: "translateX(-50%)", whiteSpace: "nowrap" }}>
           {rotationLabel !== null ? `${Math.round(rotationLabel)}°` : `${Math.round(b.w)} × ${Math.round(b.h)}`}
@@ -470,7 +470,7 @@ export function SmartGuides({ guides, distances }: { guides: GuideLine[]; distan
               x={d.labelX}
               y={d.labelY}
               dy="0.34em"
-              fill="white"
+              fill="var(--sq-paper)"
               fontFamily="var(--font-sans), ui-sans-serif, sans-serif"
               className="text-micro font-medium tabular-nums"
               textAnchor="middle"

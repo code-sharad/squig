@@ -32,7 +32,12 @@ import { breakApart } from "./library/break-apart"
 import { findBlueprint, placeBlueprint } from "./library/system-templates"
 import {
   applyLook,
+  DEFAULT_APPEARANCE,
   DEFAULT_LOOK,
+  isDark,
+  SYSTEM_DARK_QUERY,
+  systemPrefersDark,
+  type Appearance,
   type FontMode,
   type Look,
   type PaperShade,
@@ -53,6 +58,7 @@ import {
   saveFile,
   savePrefs,
   type FileMeta,
+  type Prefs,
 } from "./files"
 import { planTabSync } from "./tabs"
 import { DEFAULT_BIG_NUDGE, normalizeBigNudge } from "./nudge"
@@ -130,6 +136,12 @@ interface SquigState {
   contextRow: boolean
   /** Shift's configurable step for canvas move and resize nudges. */
   bigNudge: number
+  /** the room the app is in: the canvas palette's night form and the chrome's
+   *  tokens both follow it. App-level, so it lives in prefs, not the document. */
+  appearance: Appearance
+  /** what the system says right now. Kept in state, not read at paint time, so
+   *  anything that derives a colour from it re-renders when the system flips. */
+  systemDark: boolean
   /* --- the look, kept flat so a control can subscribe to just its own knob.
      It belongs to the open document: every setter writes it back to the file,
      and opening another one brings that file's look with it. */
@@ -190,6 +202,7 @@ interface SquigState {
   restoreAspect: (ids?: string[]) => void
   setContextRow: (on: boolean) => void
   setBigNudge: (n: number) => void
+  setAppearance: (a: Appearance) => void
   setTheme: (t: ThemeName) => void
   setFont: (f: FontMode) => void
   setPaper: (s: PaperShade) => void
@@ -563,10 +576,26 @@ export function lookOf(s: Pick<SquigState, "theme" | "paper" | "font" | "grid">)
 }
 
 /** Put a look on screen and in state — the one path both the panel and an
-    opened file go through, so they can't drift apart. */
-function wearLook(set: (partial: Partial<SquigState>) => void, look: Look) {
-  set(look)
-  applyLook(look)
+    opened file go through, so they can't drift apart. The room comes from the
+    store, so opening a document in a dark room stays dark. */
+function wearLook(look: Look) {
+  useSquig.setState(look)
+  const { appearance, systemDark } = useSquig.getState()
+  applyLook(look, isDark(appearance, systemDark))
+}
+
+/**
+ * The app's own settings in one object, so every write to prefs carries all of
+ * them. A partial write would quietly reset a field nobody touched.
+ */
+function prefsOf(s: SquigState): Prefs {
+  return {
+    look: lookOf(s),
+    appearance: s.appearance,
+    contextRow: s.contextRow,
+    bigNudge: s.bigNudge,
+    activeId: s.docId,
+  }
 }
 
 /**
@@ -608,7 +637,7 @@ function flushSave(get: () => SquigState, force = false) {
   const s = get()
   // the look goes to prefs too, but only as the default a new file will start
   // from — the copy that matters travels inside the document below
-  savePrefs({ look: lookOf(s), contextRow: s.contextRow, bigNudge: s.bigNudge, activeId: s.docId })
+  savePrefs(prefsOf(s))
   // Shared canvases persist through the cloud bridge. The local drawer's
   // capacity and timestamp guards must not report cloud documents as unsaved.
   if (s.docId.startsWith("agent_")) { dirty = false; return }
@@ -719,7 +748,7 @@ function adoptDoc(get: () => SquigState) {
     past: [],
     future: [],
   })
-  if (doc.look) wearLook(useSquig.setState, doc.look)
+  if (doc.look) wearLook(doc.look)
   nowSeeing(doc.updatedAt)
   get().setNotice("another tab saved this drawing — this one caught up")
 }
@@ -763,6 +792,17 @@ function watchWindow(get: () => SquigState) {
   window.addEventListener("pagehide", save)
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") save()
+  })
+  // The room follows the system's own day/night switch while it is set to
+  // `system`. This listener is installed once and lives as long as the page,
+  // like the rest of these; the store has no unmount to clean up after.
+  const scheme = window.matchMedia?.(SYSTEM_DARK_QUERY)
+  scheme?.addEventListener("change", () => {
+    const s = get()
+    // the flag goes into state so a panel previewing the night sheet repaints
+    // too; the canvas itself only needs the stylesheet rewired
+    useSquig.setState({ systemDark: scheme.matches })
+    if (s.appearance === "system") applyLook(lookOf(s), scheme.matches)
   })
   window.addEventListener("storage", (e) => {
     if (e.key === INDEX_KEY || e.key === SHARED_INDEX_KEY) {
@@ -820,6 +860,8 @@ export const useSquig = create<SquigState>((set, get) => ({
   croppingId: null,
   contextRow: false,
   bigNudge: DEFAULT_BIG_NUDGE,
+  appearance: DEFAULT_APPEARANCE,
+  systemDark: false,
   ...DEFAULT_LOOK,
   hydrated: false,
   commandOpen: false,
@@ -902,21 +944,29 @@ export const useSquig = create<SquigState>((set, get) => ({
     set({ bigNudge: normalizeBigNudge(n) })
     scheduleSave(get)
   },
+  setAppearance: (a) => {
+    // The room is a preference rather than an edit: nothing about the drawing
+    // changes, so there is no undo step and no document write, just prefs and
+    // a repaint before the next frame.
+    set({ appearance: a })
+    savePrefs(prefsOf(get()))
+    applyLook(lookOf(get()), isDark(a, get().systemDark))
+  },
   // each of these edits the open document, so each schedules a save
   setTheme: (t) => {
-    wearLook(set, { ...lookOf(get()), theme: t })
+    wearLook({ ...lookOf(get()), theme: t })
     scheduleSave(get)
   },
   setFont: (f) => {
-    wearLook(set, { ...lookOf(get()), font: f })
+    wearLook({ ...lookOf(get()), font: f })
     scheduleSave(get)
   },
   setPaper: (p) => {
-    wearLook(set, { ...lookOf(get()), paper: p })
+    wearLook({ ...lookOf(get()), paper: p })
     scheduleSave(get)
   },
   setGrid: (on) => {
-    wearLook(set, { ...lookOf(get()), grid: on })
+    wearLook({ ...lookOf(get()), grid: on })
     scheduleSave(get)
   },
   setViewport: (v) => set({ viewport: v }),
@@ -1396,11 +1446,13 @@ export const useSquig = create<SquigState>((set, get) => ({
       files: listRecentFiles(),
       contextRow: prefs.contextRow,
       bigNudge: prefs.bigNudge,
+      appearance: prefs.appearance,
+      systemDark: systemPrefersDark(),
       hydrated: true,
     })
     // the document's own look, or — for one saved before looks existed — the
     // last look this browser was set to
-    wearLook(set, doc?.look ?? prefs.look)
+    wearLook(doc?.look ?? prefs.look)
     // what we just read is, by definition, what the drawer already holds
     nowSeeing(doc?.updatedAt ?? null)
     watchWindow(get)
@@ -1961,7 +2013,7 @@ export const useSquig = create<SquigState>((set, get) => ({
     })
     // a drawing carries its own ink and paper; one saved before looks existed
     // keeps whatever is on screen rather than snapping to a default
-    if (doc.look) wearLook(set, doc.look)
+    if (doc.look) wearLook(doc.look)
     // frame what's there, but never past life size — 400% on one small
     // rectangle tells you nothing about where you've landed
     if (clean.order.length) fitBox(set, clean.order.map((nid) => clean.nodes[nid]), 1)
@@ -2048,7 +2100,7 @@ export const useSquig = create<SquigState>((set, get) => ({
     // A companion reuses its file's cache identity across reconnects. Imports
     // still get a new drawing; neither case bypasses the drawer's timestamp guard.
     nowSeeing(id ? readFile(id)?.updatedAt ?? null : null)
-    wearLook(set, doc.look)
+    wearLook(doc.look)
     // an imported file was drawn wherever its author left it — go there,
     // or the canvas looks empty when it isn't
     if (doc.order.length) fitBox(set, doc.order.map((id) => doc.nodes[id]), 1)
