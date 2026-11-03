@@ -2,7 +2,7 @@
 
 import { create } from "zustand"
 import { nanoid } from "nanoid"
-import type { ComponentNode, GroupStyles, ImageNode, SquigComment, SquigVariation, SquigNode, TextAlign, TextNode, TextVerticalAlign, Tool, Viewport, ShapeKind } from "./types"
+import type { ComponentNode, GroupStyle, GroupStyles, ImageNode, SquigComment, SquigVariation, SquigNode, TextAlign, TextNode, TextVerticalAlign, Tool, Viewport, ShapeKind } from "./types"
 import { screenToWorld, unionBox } from "./types"
 import { componentNode, DocError, parseDoc, sanitizeDoc, serializeDoc } from "./doc"
 import { remapBinds, settleBinds } from "./canvas/arrow-binding"
@@ -23,6 +23,7 @@ import {
   planCloneGroupPaths,
   planGroupPaths,
   pruneDegenerateGroups,
+  pruneGroupStyles,
 } from "./canvas/groups"
 import { normalizeRotation } from "./canvas/rotation"
 import { spaceNodes, tidyNodes, type SpacingOptions } from "./canvas/spacing"
@@ -63,6 +64,8 @@ import { useCanvasSyncIssue } from "./agent/sync-status"
 interface DocSnapshot {
   nodes: Record<string, SquigNode>
   order: string[]
+  /** the boundary names as they stood: a rename is an edit like any other */
+  groups: GroupStyles
   /** selection before the edit — what undo puts you back to */
   selection: string[]
   /** the group that selection represents, when it is one nested group */
@@ -254,6 +257,8 @@ interface SquigState {
 
   /** grow a set of ids to whole groups — what a click on a member selects */
   expandSelection: (ids: string[]) => string[]
+  /** name a group, or take its name away with null. One undo step either way. */
+  setGroupStyle: (groupId: string, style: GroupStyle | null) => void
   groupSelected: () => void
   /** ⇧⌘G — peels one group off, or detaches instances when nothing is grouped */
   ungroupSelected: () => void
@@ -335,10 +340,12 @@ const SAVE_DEBOUNCE_MS = 400
  * quietly, by rewriting history under itself. scripts/test-history.ts is there
  * to say so out loud.
  */
-function snapshot(s: Pick<SquigState, "nodes" | "order" | "selection" | "selectionGroupId" | "selectionGroups">): DocSnapshot {
+function snapshot(s: Pick<SquigState, "nodes" | "order" | "groups" | "selection" | "selectionGroupId" | "selectionGroups">): DocSnapshot {
   return {
     nodes: s.nodes,
     order: s.order,
+    // shared the same way, and for the same reason: every write rebuilds it
+    groups: s.groups,
     selection: [...s.selection],
     selectionGroupId: s.selectionGroupId,
     selectionGroups: s.selectionGroups,
@@ -360,8 +367,8 @@ function stampSelAfter(past: DocSnapshot[], selection: string[], selectionGroupI
   }
 }
 
-/** Just the two fields an undo step is really about. */
-type Doc = Pick<SquigState, "nodes" | "order">
+/** Just the fields an undo step is really about. */
+type Doc = Pick<SquigState, "nodes" | "order" | "groups">
 
 /**
  * Two values that say the same thing about the drawing.
@@ -406,6 +413,9 @@ function sameValue(a: unknown, b: unknown): boolean {
  * command, never inside a drag. See `edit` below.
  */
 function sameDoc(a: Doc, b: Doc): boolean {
+  // a rename changes nothing about the drawing and everything about the
+  // document, so it is compared like a node rather than skipped as chrome
+  if (!sameValue(a.groups, b.groups)) return false
   if (a.order !== b.order) {
     if (a.order.length !== b.order.length) return false
     for (let i = 0; i < a.order.length; i++) if (a.order[i] !== b.order[i]) return false
@@ -613,6 +623,7 @@ function flushSave(get: () => SquigState, force = false) {
       name: s.fileName,
       nodes: s.nodes,
       order: s.order,
+      groups: s.groups,
       variations: s.variations,
       comments: s.comments,
       updatedAt: at,
@@ -696,6 +707,7 @@ function adoptDoc(get: () => SquigState) {
     comments: doc.comments ?? [],
     nodes: clean.nodes,
     order: clean.order,
+    groups: pruneGroupStyles(doc.groups, clean.nodes) ?? {},
     // whatever of the selection survived the other tab's edit, in document order
     selection: selectable(clean.order.filter((id) => held.has(id)), clean.nodes),
     selectionGroupId: null,
@@ -984,6 +996,7 @@ export const useSquig = create<SquigState>((set, get) => ({
     set({
       nodes: prev.nodes,
       order: prev.order,
+      groups: prev.groups,
       selection: selectable(prev.selection, prev.nodes),
       selectionGroupId: prev.selectionGroupId,
       selectionGroups: prev.selectionGroups,
@@ -1135,10 +1148,12 @@ export const useSquig = create<SquigState>((set, get) => ({
           ? s.selectionGroupId
           : null
       stampSelAfter(s.past, selection, selectionGroupId, selectionGroups)
+      const settled = settleBinds(nodes)
       return {
         // an arrow aimed at something that just went away lets go of it and
         // stays exactly where it was last drawn — see settleBinds
-        nodes: settleBinds(nodes),
+        nodes: settled,
+        groups: pruneGroupStyles(s.groups, settled) ?? {},
         order,
         selection,
         selectionGroupId,
@@ -1254,8 +1269,10 @@ export const useSquig = create<SquigState>((set, get) => ({
           ...s.nodes,
           ...Object.fromEntries(clones.map((c) => [c.id, c])),
         })
+        const nodes = settleBinds(map)
         return {
-          nodes: settleBinds(map),
+          nodes,
+          groups: pruneGroupStyles(s.groups, nodes) ?? {},
           order: orderWithClones(s.order, src, clones),
           selection: clones.map((c) => c.id),
           selectionGroupId: cloneGroupId,
@@ -1315,6 +1332,7 @@ export const useSquig = create<SquigState>((set, get) => ({
         future: [...s.future, forward],
         nodes: prev.nodes,
         order: prev.order,
+        groups: prev.groups,
         // history is restored wholesale, so it restores the rule too: whatever
         // the selection was then, it can't hand back something locked now
         selection: selectable(prev.selection, prev.nodes),
@@ -1341,6 +1359,7 @@ export const useSquig = create<SquigState>((set, get) => ({
         past: [...s.past, { ...snapshot(s), selAfter: restored, selGroupAfter: restoredGroup, selGroupsAfter: next.selGroupsAfter ?? next.selectionGroups }],
         nodes: next.nodes,
         order: next.order,
+        groups: next.groups,
         selection: selectable(next.order.filter((id) => restored.includes(id)), next.nodes),
         selectionGroupId: restoredGroup,
         selectionGroups: next.selGroupsAfter ?? next.selectionGroups,
@@ -1367,6 +1386,7 @@ export const useSquig = create<SquigState>((set, get) => ({
       comments: doc?.comments ?? [],
       nodes: clean.nodes,
       order: clean.order,
+      groups: pruneGroupStyles(doc?.groups, clean.nodes) ?? {},
       selection: [],
       selectionGroupId: null,
       selectionGroups: [],
@@ -1385,7 +1405,7 @@ export const useSquig = create<SquigState>((set, get) => ({
 
   // clearing a canvas that is already clear is the emptiest edit there is
   clearCanvas: () => {
-    get().edit(() => set({ nodes: {}, order: [], selection: [], selectionGroupId: null, selectionGroups: [], editingId: null, croppingId: null }))
+    get().edit(() => set({ nodes: {}, order: [], groups: {}, selection: [], selectionGroupId: null, selectionGroups: [], editingId: null, croppingId: null }))
   },
 
   // -- groups ---------------------------------------------------------------
@@ -1413,6 +1433,23 @@ export const useSquig = create<SquigState>((set, get) => ({
     return selectable(order.filter((id) => out.has(id)), nodes)
   },
 
+  /**
+   * A name is document state, not chrome: it saves with the drawing, undoes
+   * with it and travels with it. So it goes through edit() like any other
+   * change, which is also what stops a rename that says the same thing from
+   * costing an undo step.
+   */
+  setGroupStyle: (groupId, style) => {
+    get().edit(() =>
+      set((s) => {
+        const groups = { ...s.groups }
+        if (style) groups[groupId] = style
+        else delete groups[groupId]
+        return { groups }
+      })
+    )
+  },
+
   groupSelected: () => {
     const { selection, nodes, order } = get()
     const ids = order.filter((id) => selection.includes(id) && nodes[id])
@@ -1430,8 +1467,10 @@ export const useSquig = create<SquigState>((set, get) => ({
       const top = s.order.lastIndexOf(ids[ids.length - 1])
       const before = s.order.slice(0, top + 1).filter((id) => !ids.includes(id))
       const after = s.order.slice(top + 1).filter((id) => !ids.includes(id))
+      const nodes = pruneDegenerateGroups(map)
       return {
-        nodes: pruneDegenerateGroups(map),
+        nodes,
+        groups: pruneGroupStyles(s.groups, nodes) ?? {},
         order: [...before, ...ids, ...after],
         selection: ids,
         selectionGroupId: gid,
@@ -1472,7 +1511,13 @@ export const useSquig = create<SquigState>((set, get) => ({
       // what's being dissolved, and leaving one node stamped with a group that
       // no longer exists would be worse — but it doesn't come out selected
       const next = pruneDegenerateGroups(map)
-      return { nodes: next, selection: selectable(freed, next), selectionGroupId: null, selectionGroups: [] }
+      return {
+        nodes: next,
+        groups: pruneGroupStyles(s.groups, next) ?? {},
+        selection: selectable(freed, next),
+        selectionGroupId: null,
+        selectionGroups: [],
+      }
     }))
   },
 
@@ -1621,8 +1666,10 @@ export const useSquig = create<SquigState>((set, get) => ({
           groupMembers(outer, nodes, order).length === ids.length
             ? outer
             : null
+        const settled = settleBinds(nodes)
         return {
-          nodes: settleBinds(nodes),
+          nodes: settled,
+          groups: pruneGroupStyles(s.groups, settled) ?? {},
           order,
           selection: ids,
           selectionGroupId,
@@ -1719,11 +1766,13 @@ export const useSquig = create<SquigState>((set, get) => ({
     const cloneGroups = selectionGroups.flatMap((g) => groupMap.has(g) ? [groupMap.get(g)!] : [])
     set((s) => {
       stampSelAfter(s.past, ids, cloneGroupId, cloneGroups)
+      const nodes = settleBinds(pruneDegenerateGroups({
+        ...s.nodes,
+        ...Object.fromEntries(clones.map((c) => [c.id, c])),
+      }))
       return {
-        nodes: settleBinds(pruneDegenerateGroups({
-          ...s.nodes,
-          ...Object.fromEntries(clones.map((c) => [c.id, c])),
-        })),
+        nodes,
+        groups: pruneGroupStyles(s.groups, nodes) ?? {},
         order: orderWithClones(s.order, src, clones),
         selection: ids,
         selectionGroupId: cloneGroupId,
@@ -1833,6 +1882,7 @@ export const useSquig = create<SquigState>((set, get) => ({
       comments: [],
       nodes: {},
       order: [],
+      groups: {},
       selection: [],
       selectionGroupId: null,
       selectionGroups: [],
@@ -1879,6 +1929,7 @@ export const useSquig = create<SquigState>((set, get) => ({
       comments: doc.comments ?? [],
       nodes: clean.nodes,
       order: clean.order,
+      groups: pruneGroupStyles(doc.groups, clean.nodes) ?? {},
       selection: [],
       selectionGroupId: null,
       selectionGroups: [],
@@ -1928,6 +1979,7 @@ export const useSquig = create<SquigState>((set, get) => ({
       comments: [],
       nodes: {},
       order: [],
+      groups: {},
       selection: [],
       selectionGroupId: null,
       selectionGroups: [],
@@ -1948,7 +2000,7 @@ export const useSquig = create<SquigState>((set, get) => ({
 
   serialize: () => {
     const s = get()
-    return serializeDoc({ fileName: s.fileName, look: lookOf(s), nodes: s.nodes, order: s.order, variations: s.variations, comments: s.comments })
+    return serializeDoc({ fileName: s.fileName, look: lookOf(s), nodes: s.nodes, order: s.order, groups: s.groups, variations: s.variations, comments: s.comments })
   },
 
   loadDoc: (json, id) => {
@@ -1965,6 +2017,7 @@ export const useSquig = create<SquigState>((set, get) => ({
       comments: doc.comments ?? [],
       nodes: doc.nodes,
       order: doc.order,
+      groups: doc.groups ?? {},
       selection: [],
       selectionGroupId: null,
       selectionGroups: [],

@@ -89,7 +89,7 @@ declare global {
 /** The store's document, borrowed — safe to hand to lib/doc, which never mutates. */
 function current(): SquigDocument {
   const s = useSquig.getState()
-  return { fileName: s.fileName, look: lookOf(s), nodes: s.nodes, order: s.order, variations: s.variations, comments: s.comments }
+  return { fileName: s.fileName, look: lookOf(s), nodes: s.nodes, order: s.order, groups: s.groups, variations: s.variations, comments: s.comments }
 }
 
 const api: SquigAgentApi = {
@@ -183,7 +183,7 @@ const api: SquigAgentApi = {
     const d = current()
     const picked = ids ? new Set(ids) : null
     const list = picked ? d.order.filter((id) => picked.has(id)).map((id) => d.nodes[id]) : nodesOf(d)
-    return renderSvg(list, d.look)
+    return renderSvg(list, d.look, "paper", undefined, d.groups)
   },
 }
 

@@ -29,7 +29,7 @@ export interface FileMeta {
   agentId?: string
 }
 
-export interface StoredDoc extends Pick<SquigDoc, "variations" | "comments"> {
+export interface StoredDoc extends Pick<SquigDoc, "variations" | "comments" | "groups"> {
   id: string
   name: string
   nodes: Record<string, SquigNode>
@@ -151,6 +151,7 @@ export function readFile(id: string): StoredDoc | null {
     ...doc,
     variations: metadata.variations,
     comments: metadata.comments,
+    groups: metadata.groups,
     id,
     name: typeof doc.name === "string" ? doc.name : "untitled scribbles",
     // a document written before looks existed has none; the caller keeps the

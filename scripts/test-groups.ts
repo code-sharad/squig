@@ -30,6 +30,7 @@ function reset() {
   useSquig.setState({
     nodes: {},
     order: [],
+    groups: {},
     selection: [],
     selectionGroupId: null,
     selectionGroups: [],
@@ -201,6 +202,42 @@ for (const [label, duplicate] of [
   s().redo()
   check("redo restores the copied leaves", copies.every((id) => !!s().nodes[id]))
   check("redo restores the copied group as active", !!copiedGroup && s().selectionGroupId === copiedGroup && copiedGroup !== g)
+}
+
+// -- a name is an edit, and undo knows it ------------------------------------
+
+{
+  reset()
+  const a = rect(0)
+  const b = rect(80)
+  const g = group([a, b])
+
+  s().setGroupStyle(g, { label: "aws" })
+  check("naming a group stores the name", s().groups[g]?.label === "aws")
+  check("…with the default placement left absent", s().groups[g]?.at === undefined)
+
+  const depth = s().past.length
+  s().setGroupStyle(g, { label: "prod", at: "edge-center" })
+  check("a rename is one undo step", s().past.length === depth + 1)
+  s().undo()
+  check("undo takes the old name back", s().groups[g]?.label === "aws" && s().groups[g]?.at === undefined)
+  s().redo()
+  check("redo puts the new one back", s().groups[g]?.label === "prod" && s().groups[g]?.at === "edge-center")
+
+  const settled = s().past.length
+  s().setGroupStyle(g, { label: "prod", at: "edge-center" })
+  check("naming it what it already says costs no undo step", s().past.length === settled)
+
+  s().setGroupStyle(g, null)
+  check("clearing the name removes the record", s().groups[g] === undefined)
+  s().undo()
+  check("…and undo brings it back", s().groups[g]?.label === "prod")
+
+  // deleting the group's last member takes the name with it: a record outliving
+  // its group would draw a boundary around nothing
+  s().setSelection([b], null)
+  s().deleteSelected()
+  check("the last member takes the name with it", s().groups[g] === undefined)
 }
 
 // -- a boundary is a group with a name --------------------------------------
