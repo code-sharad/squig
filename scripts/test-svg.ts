@@ -131,7 +131,7 @@ const gs = (svg: string) => (svg.match(/<g transform="translate\(/g) ?? []).leng
     { ...btn, groupIds: ["region"] },
   ]
   const groups = { region: { label: "aws us-east-1" } }
-  const svg = renderSvg(grouped, LOOK, "paper", undefined, groups)
+  const svg = renderSvg(grouped, LOOK, "paper", undefined, { groups })
   check("an exported boundary prints its name", svg.includes(">aws us-east-1</text>"))
   check("…and is drawn before the nodes it holds", svg.indexOf('translate(-24 -4)') < svg.indexOf('translate(10 20)'))
   const vb = svg.match(/viewBox="([^"]+)"/)?.[1].split(" ").map(Number)
@@ -143,12 +143,12 @@ const gs = (svg: string) => (svg.match(/<g transform="translate\(/g) ?? []).leng
   )
 
   const pad = new RegExp(`<path d="[^"]*" stroke="none" stroke-width="0" fill="${paletteOf(LOOK.theme).paper}"`)
-  const edge = renderSvg(grouped, LOOK, "paper", undefined, { region: { label: "aws", at: "edge-center" } })
+  const edge = renderSvg(grouped, LOOK, "paper", undefined, { groups: { region: { label: "aws", at: "edge-center" } } })
   check("an edge name sits on a paper pad", edge.includes(">aws</text>") && pad.test(edge))
   check("…that prints before the words", edge.search(pad) < edge.indexOf(">aws</text>"))
 
   check("an unnamed group draws nothing", !renderSvg(grouped, LOOK).includes("aws"))
-  const stale = renderSvg(grouped, LOOK, "paper", undefined, { gone: { label: "ghost" } })
+  const stale = renderSvg(grouped, LOOK, "paper", undefined, { groups: { gone: { label: "ghost" } } })
   check("a name whose group has no members draws nothing", !stale.includes("ghost"))
 }
 

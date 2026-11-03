@@ -34,6 +34,11 @@ export interface Palette {
   grid: string
   /** selection UI — deliberately NOT the ink, so it reads against the art */
   select: string
+  /**
+   * This palette is the night version of one. The colours are the truth; the
+   * flag is how the paper ladder knows which way "lighter" runs.
+   */
+  night?: true
 }
 
 export const THEMES = {
@@ -111,6 +116,29 @@ export const THEMES = {
   },
 } satisfies Record<string, Palette>
 
+/**
+ * The night ink for each palette: three values, not nine.
+ *
+ * A night theme is the day palette with ink and paper traded places, and the
+ * rest of the ladder still follows the rule at the top of this file: the two
+ * shades are the ink mixed into the paper, the secondary text is the ink mixed
+ * into the sheet. So only the sheet, the ink and the selection colour are
+ * chosen by hand; everything between them is derived, and retuning one palette
+ * cannot leave a stray fill behind.
+ *
+ * None of these are black, white or fully saturated. A warm off-white ink on a
+ * hue-tinted charcoal keeps the risograph feel at night, and the one bright
+ * element stays the ink itself, which is what the drawing is made of.
+ */
+const NIGHT: Record<ThemeName, { bg: string; ink: string; select: string }> = {
+  "internet-blue": { bg: "#101322", ink: "#8B9BFF", select: "#C77DFF" },
+  "riso-red": { bg: "#1A1211", ink: "#FF8477", select: "#7FA5FF" },
+  "terminal-green": { bg: "#0E1712", ink: "#63D992", select: "#F1975A" },
+  plum: { bg: "#17111C", ink: "#CE93E4", select: "#E8C46B" },
+  marigold: { bg: "#191307", ink: "#F2B964", select: "#7FA5FF" },
+  graphite: { bg: "#121110", ink: "#E9E4DA", select: "#F0925F" },
+}
+
 export type ThemeName = keyof typeof THEMES
 
 export const THEME_NAMES = Object.keys(THEMES) as ThemeName[]
@@ -179,9 +207,16 @@ function mix(a: string, b: string, t: number): string {
   return `#${[c(r1, r2), c(g1, g2), c(b1, b2)].map((n) => n.toString(16).padStart(2, "0")).join("")}`
 }
 
-/** The sheet colour: what sits behind the whole drawing. */
+/**
+ * The sheet colour: what sits behind the whole drawing.
+ *
+ * At night the ladder runs the other way, because the grid colour is a lift off
+ * the sheet rather than a step down from it. So the same two expressions give
+ * the right direction in both rooms: white lifts a hair toward white, shaded
+ * takes a step toward the grid, and the middle shade is the authored sheet.
+ */
 export function bgOf(p: Palette, shade: PaperShade): string {
-  if (shade === "white") return "#FFFFFF"
+  if (shade === "white") return p.night ? mix(p.bg, "#FFFFFF", 0.05) : "#FFFFFF"
   // far enough toward the grid colour to read as a choice — at half that, the
   // three shades look like the same white three times
   if (shade === "shaded") return mix(p.bg, p.grid, 0.7)
@@ -193,8 +228,34 @@ function gridOf(p: Palette, shade: PaperShade): string {
   return shade === "shaded" ? mix(p.grid, p.ink, 0.15) : p.grid
 }
 
-export function paletteOf(name: string): Palette {
-  return THEMES[name as ThemeName] ?? THEMES[DEFAULT_THEME]
+/**
+ * A palette by name, in the day or the night room.
+ *
+ * Derived on each call rather than cached, because a palette is ten strings and
+ * a mix, and a cache keyed by name plus mode is one more thing that can be
+ * stale after a hot reload. Retune a night ink and every derived tone moves
+ * with it, which is the point of choosing only three.
+ */
+export function paletteOf(name: string, night = false): Palette {
+  const key = name in THEMES ? (name as ThemeName) : DEFAULT_THEME
+  const p = THEMES[key]
+  if (!night) return p
+  const n = NIGHT[key]
+  const paper = mix(n.bg, n.ink, 0.055)
+  return {
+    label: p.label,
+    bg: n.bg,
+    paper,
+    ink: n.ink,
+    muted: mix(n.bg, n.ink, 0.62),
+    faint: mix(n.bg, n.ink, 0.32),
+    // the same rule as the day ladder: ink mixed into the paper it sits on
+    shade: mix(paper, n.ink, 0.08),
+    shadeStrong: mix(paper, n.ink, 0.2),
+    grid: mix(n.bg, n.ink, 0.14),
+    select: n.select,
+    night: true,
+  }
 }
 
 // ---------------------------------------------------------------------------

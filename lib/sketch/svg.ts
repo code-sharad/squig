@@ -173,11 +173,11 @@ export async function loadIconsFor(list: readonly SquigNode[]): Promise<void> {
 export function drawNodes(
   list: readonly SquigNode[],
   look: Look,
-  opts: { font?: string; measureText?: TextMeasurer; pad?: number; groups?: GroupStyles } = {}
+  opts: { font?: string; measureText?: TextMeasurer; pad?: number; groups?: GroupStyles; night?: boolean } = {}
 ): { body: string; x: number; y: number; w: number; h: number; paper: string } | null {
   if (!list.length) return null
-  const { font = FONT_STACK[look.font], measureText, pad = EXPORT_PAD, groups } = opts
-  const palette = paletteOf(look.theme)
+  const { font = FONT_STACK[look.font], measureText, pad = EXPORT_PAD, groups, night = false } = opts
+  const palette = paletteOf(look.theme, night)
   const resolve = makeResolver(palette)
   const boundaries = boundaryList(list, groups)
   // routed connectors can bow or dogleg outside the endpoint box stored on
@@ -225,9 +225,9 @@ export function renderSvg(
   look: Look,
   surface: ExportSurface = "paper",
   measureText?: TextMeasurer,
-  groups?: GroupStyles
+  extra: { groups?: GroupStyles; night?: boolean } = {}
 ): string {
-  const d = drawNodes(list, look, { measureText, groups })
+  const d = drawNodes(list, look, { measureText, ...extra })
   if (!d) return ""
   return `<?xml version="1.0" encoding="UTF-8"?>\n${svgDocument({ ...d, css: "" }, d.w, d.h, surface)}`
 }
