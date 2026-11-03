@@ -1759,7 +1759,7 @@ export const useSquig = create<SquigState>((set, get) => ({
     if (!bp) return
     const v = get().viewport
     const [cx, cy] = screenToWorld(v, window.innerWidth / 2, window.innerHeight / 2)
-    const placed = placeBlueprint(bp, { x: cx, y: cy })
+    const placed = placeBlueprint(bp, { x: cx, y: cy }, Object.values(get().nodes))
     // addNodes on the cheap, then the names: one edit is one undo step, and its
     // checkpoint is taken before either half runs, so ⌘Z takes the region with
     // the boxes it was drawn around

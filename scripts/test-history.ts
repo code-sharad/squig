@@ -364,11 +364,31 @@ const docJson = () => JSON.stringify({ nodes: s().nodes, order: s().order })
   // a second insertion has to be a second drawing: sharing a node id would
   // overwrite the first, and sharing a region id would merge the two
   s().insertBlueprint("chat")
+  const secondIds = [...s().selection]
   check("a second insertion doubles the sheet", s().order.length === ids.length * 2)
   check("…without overwriting a single box", new Set(s().order).size === s().order.length)
   check("…and with a region of its own", Object.keys(s().groups).length === 2)
   s().undo()
   check("one ⌘Z takes the second one and leaves the first", s().order.join() === ids.join())
+
+  // two architectures side by side is the reason to ask for a second one, so a
+  // blueprint must not land inside the first one's boxes
+  {
+    const bounds = (pick: string[]) => {
+      const bs = pick.map((id) => s().nodes[id]).filter(Boolean).map((n) => ({ x: n.x, y: n.y, w: n.w, h: n.h }))
+      return {
+        minX: Math.min(...bs.map((b) => b.x)),
+        minY: Math.min(...bs.map((b) => b.y)),
+        maxX: Math.max(...bs.map((b) => b.x + b.w)),
+        maxY: Math.max(...bs.map((b) => b.y + b.h)),
+      }
+    }
+    const first = bounds(ids)
+    const second = bounds(secondIds)
+    const apart =
+      second.minX > first.maxX || second.maxX < first.minX || second.minY > first.maxY || second.maxY < first.minY
+    check("the second blueprint stands clear of the first", apart, JSON.stringify({ first, second }))
+  }
 }
 
 // ---------------------------------------------------------------------------

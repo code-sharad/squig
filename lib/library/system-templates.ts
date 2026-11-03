@@ -13,6 +13,7 @@
 
 import { arrowNode, componentNode, docBounds, newId } from "../doc"
 import { remapBinds } from "../canvas/arrow-binding"
+import { nodeVisualBounds } from "../canvas/line-routing"
 import type { ArrowAnchor, ComponentNode, GroupStyles, SquigNode } from "../types"
 
 export interface BlueprintBuild {
@@ -200,14 +201,36 @@ export function findBlueprint(id: string): Blueprint | undefined {
 }
 
 /**
+ * How far a blueprint steps away from an occupied spot before trying again.
+ *
+ * More than the boundary's own padding on both sides, so two of them land
+ * side by side with air between their regions rather than two dashed lines
+ * sharing an edge.
+ */
+const CASCADE = 64
+
+/** Whether two boxes share any area at all, edges touching included. */
+function overlaps(
+  a: { minX: number; minY: number; maxX: number; maxY: number },
+  b: { minX: number; minY: number; maxX: number; maxY: number }
+): boolean {
+  return a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY
+}
+
+/**
  * A blueprint as the document will hold it: moved so its box centres on `at`,
  * with a fresh name for every node and for the region.
  *
  * The remap is here and nowhere else. Builders hand out readable local ids, so
  * two insertions would otherwise be one set of names twice, and the second
  * arrow would quietly land on the first blueprint's boxes.
+ *
+ * `occupied` is what is already on the sheet. A blueprint dropped exactly on
+ * top of another is not two drawings, it is one mess, and the point of asking
+ * for a second architecture is to hold it beside the first. So an occupied
+ * spot cascades down and right until the drawing has a place of its own.
  */
-export function placeBlueprint(bp: Blueprint, at: { x: number; y: number }): BlueprintBuild {
+export function placeBlueprint(bp: Blueprint, at: { x: number; y: number }, occupied: readonly SquigNode[] = []): BlueprintBuild {
   const { nodes, groups } = bp.build()
   // the box the drawing covers, its boundary's padding and all, since that is
   // the shape somebody sees and the thing to centre rather than the boxes alone
@@ -219,6 +242,22 @@ export function placeBlueprint(bp: Blueprint, at: { x: number; y: number }): Blu
   })
   const dx = Math.round(box ? at.x - (box.minX + box.maxX) / 2 : at.x)
   const dy = Math.round(box ? at.y - (box.minY + box.maxY) / 2 : at.y)
+  // a bounded walk, because a crowded sheet must not turn one insert into a
+  // search: forty steps is far past anything a person would do by hand
+  let step = 0
+  const spot = (n: number) =>
+    box
+      ? { minX: box.minX + dx + n * CASCADE, minY: box.minY + dy + n * CASCADE, maxX: box.maxX + dx + n * CASCADE, maxY: box.maxY + dy + n * CASCADE }
+      : null
+  if (occupied.length) {
+    const taken = occupied.map((n) => {
+      const b = nodeVisualBounds(n)
+      return { minX: b.x, minY: b.y, maxX: b.x + b.w, maxY: b.y + b.h }
+    })
+    while (step < 40 && (!spot(step) || taken.some((b) => overlaps(spot(step)!, b)))) step++
+  }
+  const shiftX = dx + step * CASCADE
+  const shiftY = dy + step * CASCADE
 
   const idMap = new Map(nodes.map((n) => [n.id, newId()]))
   const groupMap = new Map(Object.keys(groups).map((id) => [id, newId()]))
@@ -226,8 +265,8 @@ export function placeBlueprint(bp: Blueprint, at: { x: number; y: number }): Blu
     (n): SquigNode => ({
       ...n,
       id: idMap.get(n.id)!,
-      x: n.x + dx,
-      y: n.y + dy,
+      x: n.x + shiftX,
+      y: n.y + shiftY,
       ...(n.groupIds ? { groupIds: n.groupIds.map((id) => groupMap.get(id)!) } : {}),
     })
   )
