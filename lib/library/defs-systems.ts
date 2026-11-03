@@ -1,7 +1,8 @@
 // ---------------------------------------------------------------------------
-// The systems shelf: one family of boxes for drawing an architecture rather
-// than a screen. Every item is the same box, the same glyph well, the same two
-// lines of type, so a diagram built from six of them reads as one drawing.
+// The systems shelf: one family of symbols for drawing an architecture rather
+// than a screen. No box, no frame: a system diagram is a symbol with its name
+// underneath, and a frame around every item only ever meant "this is a
+// component of some kind", which the drawing already says.
 //
 // The glyphs are prims on purpose. A crisp Phosphor path inside a wobbling
 // outline looks like a rendering fault, which is the one thing this shelf
@@ -15,24 +16,29 @@ import type { ComponentDef, Props } from "./registry"
 // -- the numbers ------------------------------------------------------------
 // One place, because these twenty-two have to keep matching when one changes.
 
-const SIZE = { w: 168, h: 72 }
-/** The glyph well: a square at the left of the box, whatever height the box is. */
-const GLYPH = 22
-const GLYPH_X = 14
-/** Where the words start, clear of the well and its air. */
-const TEXT_X = 48
-const TEXT_RIGHT = 12
-const LABEL_SIZE = 14
+const SIZE = { w: 120, h: 96 }
+/**
+ * The symbol square, and how far below the item's top it starts.
+ *
+ * The band from 4 to 56 has to straddle the item's half height, 48, because a
+ * connector binds to the bounding box and a horizontal arrow lands at mid
+ * height. If the band did not reach that far every arrow in a blueprint would
+ * point at the name instead of the symbol.
+ */
+const SYMBOL = 52
+const SYMBOL_TOP = 4
+/** The square every glyph below is authored in, so one factor scales them all. */
+const GLYPH_BOX = 22
+/** Air either side of the words. */
+const SIDE = 8
+const NAME_SIZE = 14
 const NOTE_SIZE = 11
-/** The label rides a hair above dead centre; the note answers just below it. */
-const LABEL_LIFT = 2
-const NOTE_DROP = 13
-/** Where a lone label's baseline sits to look centred: half the cap height. */
-const BASELINE_MIDDLE = 4
-const BOX_R = 6
+/** Baselines below the symbol's bottom edge: the name, then the note under it. */
+const NAME_LIFT = 16
+const NOTE_STEP = 14
 /** The contour, and the weight one step down for detail the shape doesn't need. */
-const LINE = 1.5
-const DETAIL = 1.1
+const LINE = 2.2
+const DETAIL = 1.5
 
 const str = (p: Props, k: string, fallback = ""): string => String(p[k] ?? fallback)
 
@@ -47,8 +53,38 @@ const wave = (y: number): Prim[] => [
   { t: "curve", x1: 11, y1: y, cx: 16, cy: y + 4.5, x2: 21, y2: y, o: { strokeWidth: LINE } },
 ]
 
+/**
+ * A glyph's geometry drawn at the symbol's size.
+ *
+ * The pen is left alone deliberately. A strokeWidth tuned as a hairline in a
+ * 22 unit square would print as a 3.5 unit slab at 52, which is a heavier
+ * drawing rather than a bigger one, so only the marks grow and the two weights
+ * above stay the shelf's own.
+ */
+function scaleGlyph(prims: Prim[], k = SYMBOL / GLYPH_BOX): Prim[] {
+  return prims.map((p): Prim => {
+    switch (p.t) {
+      case "rect":
+        return { ...p, x: p.x * k, y: p.y * k, w: p.w * k, h: p.h * k, ...(p.r === undefined ? {} : { r: p.r * k }) }
+      case "ellipse":
+        return { ...p, x: p.x * k, y: p.y * k, w: p.w * k, h: p.h * k }
+      case "line":
+        return { ...p, x1: p.x1 * k, y1: p.y1 * k, x2: p.x2 * k, y2: p.y2 * k }
+      case "curve":
+        return { ...p, x1: p.x1 * k, y1: p.y1 * k, cx: p.cx * k, cy: p.cy * k, x2: p.x2 * k, y2: p.y2 * k }
+      case "poly":
+        return { ...p, pts: p.pts.map(([x, y]) => [x * k, y * k] as [number, number]) }
+      case "text":
+        return { ...p, x: p.x * k, y: p.y * k, size: p.size * k }
+      case "path":
+        return { ...p, x: p.x * k, y: p.y * k, size: p.size * k }
+    }
+  })
+}
+
 // -- glyphs -----------------------------------------------------------------
-// Each lives in the 22 unit square the well provides.
+// Each lives in the 22 unit square GLYPH_BOX names, and none of them draws its
+// own frame: the item has none to sit in.
 
 const serverGlyph: Prim[] = [
   rect(1, 2, 20, 8, { r: 1.5, strokeWidth: LINE }),
@@ -59,12 +95,18 @@ const serverGlyph: Prim[] = [
   dot(17.5, 16, 1.1),
 ]
 
-/** A cylinder: a rim, two sides, and a second rim where the floor curves away. */
+/**
+ * A cylinder: a rim, two sides, and the floor curving away under them.
+ *
+ * The floor is a single front arc rather than an ellipse. At 52 a full ring
+ * meets the two sides in a little spur at each corner, which reads as a slip
+ * of the pen rather than a shape.
+ */
 const databaseGlyph: Prim[] = [
   ellipse(3, 1, 16, 6, { strokeWidth: LINE }),
   line(3, 4, 3, 18, { strokeWidth: LINE }),
   line(19, 4, 19, 18, { strokeWidth: LINE }),
-  ellipse(3, 15, 16, 6, { strokeWidth: DETAIL }),
+  { t: "curve", x1: 3, y1: 18, cx: 11, cy: 24, x2: 19, y2: 18, o: { strokeWidth: DETAIL } },
 ]
 
 const cacheGlyph: Prim[] = [
@@ -73,20 +115,33 @@ const cacheGlyph: Prim[] = [
   ellipse(2, 15, 18, 5, { strokeWidth: LINE }),
 ]
 
+/**
+ * Work waiting its turn: three items in a line, and an arrow arriving at them.
+ *
+ * The bars alone read as a menu at any size. The arrow is what makes it a
+ * queue rather than a list, and it earns its few units at 52.
+ */
 const queueGlyph: Prim[] = [
-  rect(2.5, 2.5, 17, 4, { r: 1.2, strokeWidth: LINE }),
-  rect(2.5, 9, 17, 4, { r: 1.2, strokeWidth: LINE }),
-  rect(2.5, 15.5, 17, 4, { r: 1.2, strokeWidth: LINE }),
+  line(1, 11, 4.6, 11, { strokeWidth: DETAIL }),
+  poly([[3.4, 9.5], [4.9, 11], [3.4, 12.5]], false, { strokeWidth: DETAIL }),
+  rect(6.6, 2.5, 13.4, 4.2, { r: 1.2, strokeWidth: LINE }),
+  rect(6.6, 8.9, 13.4, 4.2, { r: 1.2, strokeWidth: LINE }),
+  rect(6.6, 15.3, 13.4, 4.2, { r: 1.2, strokeWidth: LINE }),
 ]
 
-/** Broadcast: one writer, two rings of listeners. */
+/**
+ * Broadcast: one writer, two waves on their way out.
+ *
+ * Concentric rings read as a target, or as a record, at 52. Waves leaving a
+ * single dot say the fan-out the word means.
+ */
 const topicGlyph: Prim[] = [
-  ellipse(1.5, 1.5, 19, 19, { strokeWidth: DETAIL }),
-  ellipse(6.5, 6.5, 9, 9, { strokeWidth: LINE }),
-  dot(11, 11, 1.5),
+  dot(3, 11, 1.5),
+  { t: "curve", x1: 6.2, y1: 6.8, cx: 11.8, cy: 11, x2: 6.2, y2: 15.2, o: { strokeWidth: LINE } },
+  { t: "curve", x1: 10.4, y1: 3.2, cx: 20.8, cy: 11, x2: 10.4, y2: 18.8, o: { strokeWidth: DETAIL } },
 ]
 
-/** A cog: a rim, a hub, and eight teeth, drawn as spokes so it reads at 22px. */
+/** A cog: a rim, a hub, and eight teeth. */
 const workerGlyph: Prim[] = [
   ellipse(3.5, 3.5, 15, 15, { strokeWidth: LINE }),
   ellipse(7.5, 7.5, 7, 7, { strokeWidth: DETAIL }),
@@ -95,8 +150,8 @@ const workerGlyph: Prim[] = [
     return line(
       11 + Math.cos(a) * 7.5,
       11 + Math.sin(a) * 7.5,
-      11 + Math.cos(a) * 9.8,
-      11 + Math.sin(a) * 9.8,
+      11 + Math.cos(a) * 10,
+      11 + Math.sin(a) * 10,
       { strokeWidth: LINE }
     )
   }),
@@ -136,9 +191,13 @@ const clientGlyph: Prim[] = [
   poly([[1, 17], [21, 17], [18.5, 19.5], [3.5, 19.5]], true, { strokeWidth: LINE }),
 ]
 
-/** An arrow through the wall: the one thing on the shelf that isn't ours. */
+/**
+ * An arrow through a wall: the one thing on the shelf that isn't ours. The wall
+ * is dashed rather than the item framed, because the glyph carries the meaning
+ * and a second dashed box around the words says it twice.
+ */
 const externalGlyph: Prim[] = [
-  rect(2, 10, 9, 9, { r: 1, strokeWidth: LINE }),
+  rect(2, 10, 9, 9, { r: 1, strokeWidth: LINE, dashed: true }),
   line(6, 16, 19, 3, { strokeWidth: LINE }),
   line(19, 3, 14.2, 4.3, { strokeWidth: LINE }),
   line(19, 3, 17.7, 7.8, { strokeWidth: LINE }),
@@ -162,12 +221,16 @@ const cronGlyph: Prim[] = [
 const streamGlyph: Prim[] = [...wave(5), ...wave(11), ...wave(17)]
 
 /** A rack: two posts and the shelves between them. */
+/**
+ * A building: a pitched roof over a body with a door.
+ *
+ * The shelves it replaced read as a ladder, which is the one thing a data
+ * warehouse is not.
+ */
 const warehouseGlyph: Prim[] = [
-  line(3, 2, 3, 20.5, { strokeWidth: LINE }),
-  line(19, 2, 19, 20.5, { strokeWidth: LINE }),
-  line(3, 7, 19, 7, { strokeWidth: DETAIL }),
-  line(3, 12.5, 19, 12.5, { strokeWidth: DETAIL }),
-  line(3, 18, 19, 18, { strokeWidth: DETAIL }),
+  poly([[1, 9], [11, 2], [21, 9]], false, { strokeWidth: LINE }),
+  poly([[2.4, 9], [2.4, 20.5], [19.6, 20.5], [19.6, 9]], false, { strokeWidth: LINE }),
+  rect(9, 14, 4, 6.5, { r: 0.8, strokeWidth: DETAIL }),
 ]
 
 const dashboardGlyph: Prim[] = [
@@ -221,12 +284,10 @@ interface ShelfItem {
   kind: string
   name: string
   group: ShelfGroup
-  /** the plain word the box arrives saying */
+  /** the plain word the item arrives saying */
   label: string
   keywords: string[]
   glyph: Prim[]
-  /** the one third-party box, so "not ours" shows before the label is read */
-  dashed?: boolean
 }
 
 const SHELF: ShelfItem[] = [
@@ -325,7 +386,6 @@ const SHELF: ShelfItem[] = [
     label: "External",
     keywords: ["third party", "third-party", "vendor", "saas", "outside", "stripe", "webhook", "api"],
     glyph: externalGlyph,
-    dashed: true,
   },
   {
     kind: "pipeline",
@@ -362,7 +422,7 @@ const SHELF: ShelfItem[] = [
   {
     // Not "dashboard": the Screens template has held that slug since before
     // this shelf existed, and a released document naming it has to keep opening
-    // as the screen it was. The word still finds this box, by name and keyword.
+    // as the screen it was. The word still finds this item, by name and keyword.
     kind: "metrics",
     name: "Dashboard",
     group: "Pipelines",
@@ -424,32 +484,28 @@ function shelfDef(item: ShelfItem): ComponentDef {
     group: item.group,
     keywords: item.keywords,
     size: SIZE,
-    // A note of its own would put words in every box before the person has a
-    // thought of their own, so the shelf ships the label and nothing else.
+    // A note of its own would put words under every symbol before the person
+    // has a thought of their own, so the shelf ships the label and nothing else.
     defaults: { label: item.label, note: "" },
     controls: [
       { key: "label", label: "Label", type: "text" },
       { key: "note", label: "Note", type: "text", help: "Free text under the name, such as a version or a count." },
     ],
     render(p, w, h) {
-      const prims: Prim[] = [rect(0, 0, w, h, { r: BOX_R, dashed: item.dashed })]
-      prims.push(...place(item.glyph, GLYPH_X, (h - GLYPH) / 2))
-      // The type stays fixed while the box resizes: a shrunken label is what
-      // "reserve room for the words" means here, so truncation does the work.
-      const room = Math.max(0, w - TEXT_X - TEXT_RIGHT)
-      const note = truncate(str(p, "note", ""), NOTE_SIZE, room)
-      // A lone label centres on the box's optical middle; one with a note above
-      // it steps up, or the pair would hang below centre.
-      prims.push(
-        text(
-          TEXT_X,
-          note ? h / 2 - LABEL_LIFT : h / 2 + BASELINE_MIDDLE,
-          truncate(str(p, "label", item.label), LABEL_SIZE, room),
-          LABEL_SIZE,
-          { bold: true }
-        )
-      )
-      if (note) prims.push(text(TEXT_X, h / 2 + NOTE_DROP, note, NOTE_SIZE, { color: "muted" }))
+      // Height sets the drawing's size, so the symbol band straddles mid height
+      // at every size and a bound connector keeps landing level with the symbol.
+      // Width only decides how much of the name survives.
+      const k = h / SIZE.h
+      const room = Math.max(0, w - SIDE * k * 2)
+      const symbol = Math.min(SYMBOL * k, room)
+      const top = SYMBOL_TOP * k
+      const middle = w / 2
+      const nameBase = top + symbol + NAME_LIFT * k
+      const name = truncate(str(p, "label", item.label), NAME_SIZE * k, room)
+      const note = truncate(str(p, "note", ""), NOTE_SIZE * k, room)
+      const prims: Prim[] = place(scaleGlyph(item.glyph, symbol / GLYPH_BOX), middle - symbol / 2, top)
+      prims.push(text(middle, nameBase, name, NAME_SIZE * k, { align: "center", bold: true }))
+      if (note) prims.push(text(middle, nameBase + NOTE_STEP * k, note, NOTE_SIZE * k, { align: "center", color: "muted" }))
       return prims
     },
   }
